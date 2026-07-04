@@ -5,15 +5,38 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 import sys
 
-from src.custom_dataset import DATASET_PATH, DatasetError
+from src.custom_dataset import DatasetError
 from src.dataset_quality import DatasetQualityError, analyze_dataset
-from src.ml_gesture_model import MODEL_PATH, train_and_save
+from src.ml_gesture_model import train_and_save
+from src.profile_paths import (
+    DEFAULT_PROFILE,
+    dataset_path_for_profile,
+    model_path_for_profile,
+)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train custom gesture model from JSONL landmarks dataset")
+    parser.add_argument(
+        "--profile",
+        default=DEFAULT_PROFILE,
+        help="Profile name for personalized datasets/models (default: default)",
+    )
+    parser.add_argument(
+        "--dataset-path",
+        type=Path,
+        default=None,
+        help="Override dataset path (otherwise derived from --profile)",
+    )
+    parser.add_argument(
+        "--model-path",
+        type=Path,
+        default=None,
+        help="Override model output path (otherwise derived from --profile)",
+    )
     parser.add_argument(
         "--min-samples-per-label",
         type=int,
@@ -64,13 +87,16 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    dataset_path = args.dataset_path or dataset_path_for_profile(args.profile)
+    model_path = args.model_path or model_path_for_profile(args.profile)
+
     if args.strict_quality:
         args.quality_check = True
 
     if args.quality_check:
         try:
             quality = analyze_dataset(
-                DATASET_PATH,
+                dataset_path,
                 min_samples_per_label=args.min_samples_per_label,
             )
         except DatasetQualityError as exc:
@@ -91,7 +117,8 @@ def main() -> None:
 
     try:
         path, metadata = train_and_save(
-            MODEL_PATH,
+            model_path,
+            dataset_path=dataset_path,
             min_samples_per_label=args.min_samples_per_label,
             test_size=args.test_size,
             random_state=args.random_state,
@@ -100,7 +127,7 @@ def main() -> None:
         )
     except DatasetError as exc:
         print(f"Training failed: {exc}")
-        print(f"Expected dataset file: {DATASET_PATH}")
+        print(f"Expected dataset file: {dataset_path}")
         print("Run capture_gesture_dataset.py to record samples first.")
         sys.exit(1)
 

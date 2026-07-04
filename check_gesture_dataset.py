@@ -7,12 +7,17 @@ import argparse
 import json
 import sys
 
-from src.custom_dataset import DATASET_PATH
 from src.dataset_quality import DatasetQualityError, analyze_dataset
+from src.profile_paths import DEFAULT_PROFILE, dataset_path_for_profile
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Check custom gesture dataset quality")
+    parser.add_argument(
+        "--profile",
+        default=DEFAULT_PROFILE,
+        help="Profile name for personalized datasets (default: default)",
+    )
     parser.add_argument(
         "--min-samples-per-label",
         type=int,
@@ -40,9 +45,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    dataset_path = dataset_path_for_profile(args.profile)
     try:
         report = analyze_dataset(
-            DATASET_PATH,
+            dataset_path,
             min_samples_per_label=args.min_samples_per_label,
             duplicate_decimals=args.duplicate_decimals,
         )

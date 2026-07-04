@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 
 from src.gesture_classifier import (
@@ -24,8 +26,13 @@ class EnsembleGestureRecognizer:
 
     SMOOTH_WINDOW = 5
 
-    def __init__(self) -> None:
-        self._ml = MLGestureClassifier()
+    def __init__(
+        self,
+        *,
+        model_path: Path | None = None,
+        dataset_path: Path | None = None,
+    ) -> None:
+        self._ml = MLGestureClassifier(model_path=model_path, dataset_path=dataset_path)
         self._history: list[tuple[str, float, str]] = []
 
     def close(self) -> None:

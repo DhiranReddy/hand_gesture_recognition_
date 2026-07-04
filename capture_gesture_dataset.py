@@ -8,17 +8,23 @@ from pathlib import Path
 
 import cv2
 
-from src.custom_dataset import DATASET_PATH, append_sample, canonical_label
+from src.custom_dataset import append_sample, canonical_label
 from src.hand_tracker import HandTracker
+from src.profile_paths import DEFAULT_PROFILE, dataset_path_for_profile
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Capture custom gesture landmarks")
     parser.add_argument("--label", required=True, help="Gesture label, e.g. HELLO or NEED_HELP")
     parser.add_argument(
+        "--profile",
+        default=DEFAULT_PROFILE,
+        help="Profile name for personalized datasets (default: default)",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
-        default=DATASET_PATH,
+        default=None,
         help="Output dataset JSONL path",
     )
     parser.add_argument(
@@ -39,6 +45,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     label = canonical_label(args.label)
+    output_path = args.output or dataset_path_for_profile(args.profile)
 
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
@@ -51,6 +58,8 @@ def main() -> int:
     auto_mode = False
 
     print(f"Capturing label: {label}")
+    print(f"Profile: {args.profile}")
+    print(f"Dataset: {output_path}")
     print(f"Target samples: {args.target}")
     print("Keys: C=capture once  A=toggle auto capture  Q=quit")
 
@@ -74,7 +83,7 @@ def main() -> int:
             if should_capture:
                 hand = hands[0]
                 append_sample(
-                    args.output,
+                    output_path,
                     label=label,
                     handedness=hand["label"],
                     landmarks=hand["landmarks"],
@@ -103,7 +112,7 @@ def main() -> int:
             if key == ord("c") and sample_ready:
                 hand = hands[0]
                 append_sample(
-                    args.output,
+                    output_path,
                     label=label,
                     handedness=hand["label"],
                     landmarks=hand["landmarks"],
@@ -115,7 +124,7 @@ def main() -> int:
         cap.release()
         cv2.destroyAllWindows()
 
-    print(f"Saved {count} samples for {label} into {args.output}")
+    print(f"Saved {count} samples for {label} into {output_path}")
     return 0
 
 

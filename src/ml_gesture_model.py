@@ -83,6 +83,7 @@ def _build_classifier(random_state: int = 42) -> MLPClassifier:
 def train_and_save(
     model_path: Path | None = None,
     *,
+    dataset_path: Path | None = None,
     min_samples_per_label: int = 20,
     test_size: float = 0.2,
     random_state: int = 42,
@@ -93,6 +94,7 @@ def train_and_save(
     path.parent.mkdir(parents=True, exist_ok=True)
 
     X, y, counts, dataset_path = load_dataset(
+        dataset_path=dataset_path,
         min_samples_per_label=min_samples_per_label,
     )
     encoder = LabelEncoder()
@@ -159,17 +161,27 @@ class MLGestureClassifier:
     MIN_CONFIDENCE = 0.56
     MIN_MARGIN = 0.10
 
-    def __init__(self, model_path: Path | None = None):
+    def __init__(
+        self,
+        model_path: Path | None = None,
+        *,
+        dataset_path: Path | None = None,
+        auto_train_if_missing: bool = True,
+    ):
         self._model = None
         self._encoder = None
         self._metadata: dict[str, Any] = {}
         self._path = model_path or MODEL_PATH
+        self._dataset_path = dataset_path
+        self._auto_train_if_missing = auto_train_if_missing
         self._load()
 
     def _load(self) -> None:
         if not self._path.exists():
+            if not self._auto_train_if_missing:
+                return
             try:
-                train_and_save(self._path)
+                train_and_save(self._path, dataset_path=self._dataset_path)
             except DatasetError as exc:
                 print(f"Custom gesture model not found and no dataset available: {exc}")
                 return
