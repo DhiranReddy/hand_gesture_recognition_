@@ -1,0 +1,220 @@
+#!/usr/bin/env python3
+"""
+Hand Gesture Caption App
+------------------------
+Assistive communication via hand gestures with live captions.
+ML ensemble + auto-spacing + spell correction for video calls.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+
+import cv2
+
+from src.caption_renderer import draw_caption_bar
+from src.conference_ui import (
+    copy_to_clipboard,
+    draw_compact_overlay,
+    draw_conference_caption_bar,
+    draw_gesture_reference,
+    draw_hold_progress,
+)
+from src.constants import (
+    CONFERENCE_HOLD_FRAMES,
+    COOLDOWN_FRAMES,
+    HOLD_FRAMES,
+)
+from src.gesture_classifier import MODE_ALL, MODE_SPELL, MODE_WORDS
+from src.gesture_ensemble import EnsembleGestureRecognizer, result_to_text
+from src.hand_tracker import HandTracker
+from src.word_processor import WordProcessor
+
+MODE_CYCLE = [MODE_ALL, MODE_WORDS, MODE_SPELL]
+MODE_NAMES = {MODE_ALL: "CUSTOM+ALL", MODE_WORDS: "CUSTOM+WORDS", MODE_SPELL: "CUSTOM+SPELL"}
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Hand gesture captions for video calls")
+    parser.add_argument("--conference", action="store_true", help="Conference mode UI")
+    parser.add_argument("--caption-only", action="store_true", help="Open caption strip window")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        print("Error: Could not open webcam. Check camera permissions.")
+        return 1
+
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 960)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 540)
+
+    tracker = HandTracker(max_hands=1)
+    recognizer = EnsembleGestureRecognizer()
+    words = WordProcessor()
+
+    recognition_mode = MODE_ALL
+    conference_mode = args.conference
+    show_caption_window = args.caption_only
+    show_skeleton = not conference_mode
+    show_guide = False
+    copied_flash = 0
+
+    current_gesture: str | None = None
+    hold_count = 0
+    cooldown = 0
+    last_added = ""
+    ml_confidence = 0.0
+
+    cv2.namedWindow("Hand Gesture Captions", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("Hand Gesture Captions", 960, 640)
+    if show_caption_window:
+        cv2.namedWindow("Captions for Meet/Zoom", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("Captions for Meet/Zoom", 960, 160)
+
+    print("Hand Gesture Caption App — custom ML mode enabled.")
+    print("Auto-spacing + spell correction active.")
+    print("Keys: M=mode  T=caption window  V=copy  H=hide mesh  G=guide  Q=quit")
+
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                print("Error: Failed to read frame from camera.")
+                break
+
+            frame = cv2.flip(frame, 1)
+            hands = tracker.process(frame, draw_skeleton=show_skeleton)
+
+            detected_id: str | None = None
+            category = "none"
+            landmarks = hands[0]["landmarks"] if hands else None
+            handedness = hands[0]["label"] if hands else "Right"
+
+            detected_id, category, ml_confidence = recognizer.recognize(
+                landmarks,
+                handedness,
+                frame,
+                mode=recognition_mode,
+            )
+
+            detected_text = result_to_text(detected_id)
+            hold_required = CONFERENCE_HOLD_FRAMES if conference_mode else HOLD_FRAMES
+
+            if cooldown > 0:
+                cooldown -= 1
+            if copied_flash > 0:
+                copied_flash -= 1
+
+            if not detected_id:
+                if words.on_idle_frame():
+                    last_added = ""
+
+            if detected_id and detected_id == current_gesture:
+                hold_count += 1
+                words.set_preview(detected_text or "")
+            else:
+                current_gesture = detected_id
+                hold_count = 0
+                if detected_text:
+                    words.set_preview(detected_text)
+                else:
+                    words.clear_preview()
+
+            progress = hold_count / hold_required if detected_id else 0.0
+            if hold_count >= hold_required and detected_text and cooldown == 0:
+                if detected_text != last_added:
+                    words.add_gesture(detected_text, category)
+                    last_added = detected_text
+                    cooldown = COOLDOWN_FRAMES
+                    hold_count = 0
+                    words.clear_preview()
+
+            hint = detected_text or ""
+            if ml_confidence > 0:
+                hint = f"{hint} ({ml_confidence:.0%})" if hint else ""
+
+            draw_compact_overlay(
+                frame,
+                show_skeleton=show_skeleton,
+                mode_label=MODE_NAMES[recognition_mode],
+                conference_mode=conference_mode,
+            )
+            if show_guide:
+                draw_gesture_reference(frame)
+            if detected_text and hold_count < hold_required:
+                draw_hold_progress(frame, progress, f"Hold: {detected_text}")
+
+            output = draw_caption_bar(
+                frame,
+                words.display_transcript,
+                preview=words.preview,
+                gesture_hint=hint,
+                mode_label=MODE_NAMES[recognition_mode],
+                buffer=words.buffer,
+                correction=words.last_correction,
+            )
+            cv2.imshow("Hand Gesture Captions", output)
+
+            if show_caption_window:
+                caption_strip = draw_conference_caption_bar(
+                    words.display_transcript,
+                    width=960,
+                    preview=words.preview,
+                    mode_label=MODE_NAMES[recognition_mode],
+                    copied_flash=copied_flash,
+                )
+                cv2.imshow("Captions for Meet/Zoom", caption_strip)
+
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q"):
+                break
+            if key == ord(" "):
+                words.add_space()
+            if key in (8, 127):
+                words.backspace()
+            if key == ord("c"):
+                words.clear()
+                last_added = ""
+            if key == ord("v"):
+                if copy_to_clipboard(words.display_transcript):
+                    copied_flash = 45
+                    print("Transcript copied to clipboard.")
+            if key == ord("m"):
+                idx = MODE_CYCLE.index(recognition_mode)
+                recognition_mode = MODE_CYCLE[(idx + 1) % len(MODE_CYCLE)]
+                print(f"Recognition mode: {MODE_NAMES[recognition_mode]}")
+            if key == ord("t"):
+                show_caption_window = not show_caption_window
+                if show_caption_window:
+                    cv2.namedWindow("Captions for Meet/Zoom", cv2.WINDOW_NORMAL)
+                    cv2.resizeWindow("Captions for Meet/Zoom", 960, 160)
+                else:
+                    cv2.destroyWindow("Captions for Meet/Zoom")
+            if key == ord("h"):
+                show_skeleton = not show_skeleton
+            if key == ord("g"):
+                show_guide = not show_guide
+            if key == ord("f"):
+                conference_mode = not conference_mode
+                if conference_mode:
+                    show_skeleton = False
+
+    finally:
+        recognizer.close()
+        tracker.close()
+        cap.release()
+        cv2.destroyAllWindows()
+
+    if words.transcript.strip():
+        print(f"\nFinal transcript: {words.transcript.strip()}")
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
