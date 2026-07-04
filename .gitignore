@@ -5,3 +5,7 @@ __pycache__/
 *.pyc
 .DS_Store
 .pytest_cache/
+profiles/*/gesture_landmarks.jsonl
+profiles/*/gesture_mlp.joblib
+profiles/*/reports/
+reports/

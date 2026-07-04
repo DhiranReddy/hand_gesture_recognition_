@@ -20,6 +20,12 @@ Spell any word letter-by-letter, use quick word gestures, or combine both in one
 4. **Auto-correct** — buffered letters are spell-checked (`H E L P` → `help`).
 5. **Captions** update live for your video call.
 
+## Standout Features
+
+- **Personal profile calibration**: collect profile-specific samples and train a personalized model.
+- **Active-learning loop in live app**: save confirmed predictions or relabel mistakes as new training samples.
+- **Benchmark report generation**: export confusion matrix and metrics, with automatic delta vs previous benchmark.
+
 ## Quick Start
 
 ```bash
@@ -29,6 +35,9 @@ pip install -r requirements.txt
 
 # Best for video calls — large caption window + minimal overlay
 python main.py --conference --caption-only
+
+# Run with a personal profile model/dataset
+python main.py --profile myname --conference --caption-only
 ```
 
 ## Using With Zoom / Meet / Teams
@@ -73,6 +82,11 @@ Retrain the custom model anytime:
 python train_gesture_model.py
 ```
 
+Profile-specific training:
+```bash
+python train_gesture_model.py --profile myname --quality-check --show-report
+```
+
 ## Add Your Own Custom Gestures
 
 Use this workflow for fully custom labels and model behavior.
@@ -83,6 +97,9 @@ Use this workflow for fully custom labels and model behavior.
 python capture_gesture_dataset.py --label NEED_HELP --target 220
 python capture_gesture_dataset.py --label CALL_DOCTOR --target 220
 python capture_gesture_dataset.py --label THANK_YOU --target 220
+
+# Collect into a specific profile
+python capture_gesture_dataset.py --profile myname --label NEED_HELP --target 220
 ```
 
 2. Train from the captured dataset:
@@ -119,6 +136,18 @@ python train_gesture_model.py --quality-check
 python train_gesture_model.py --quality-check --strict-quality
 ```
 
+Guided profile calibration (multi-label session):
+
+```bash
+python calibrate_profile.py --profile myname --per-label 90
+```
+
+Generate a benchmark report and confusion matrix:
+
+```bash
+python generate_benchmark_report.py --profile myname
+```
+
 3. Run the app normally. Any dataset label not in the built-in vocabulary is still shown as readable text (for example, `CALL_DOCTOR` appears as `Call Doctor`).
 
 ### Dataset Format
@@ -135,6 +164,11 @@ Samples are stored in `data/gesture_landmarks.jsonl`, one JSON object per line:
 - `A`: toggle auto-capture mode
 - `Q`: quit capture window
 
+### Live Active-Learning Controls
+
+- `K`: save current predicted gesture as a confirmed training sample
+- `R`: open relabel mode, type correct label, then press Enter to save correction
+
 ## Controls
 
 | Key | Action |
@@ -149,6 +183,8 @@ Samples are stored in `data/gesture_landmarks.jsonl`, one JSON object per line:
 | `F` | Toggle conference mode (cleaner view) |
 | `H` | Show/hide hand skeleton overlay |
 | `G` | Show/hide gesture reference guide |
+| `K` | Save current prediction as a training sample |
+| `R` | Relabel current frame and save correction sample |
 | `Q` | Quit |
 
 ## Recognition Modes
@@ -212,7 +248,9 @@ Hello, Hi, Goodbye, Thank you, Please, Sorry, Yes, No, Help, Water, Food, Bathro
 Hand Gesture Project/
 ├── main.py
 ├── capture_gesture_dataset.py
+├── calibrate_profile.py
 ├── check_gesture_dataset.py
+├── generate_benchmark_report.py
 ├── requirements.txt
 ├── README.md
 └── src/
@@ -230,6 +268,11 @@ models/
     └── gesture_mlp.joblib   # Trained landmark classifier
 data/
     └── gesture_landmarks.jsonl  # Custom training samples (created by capture script)
+profiles/
+    └── <profile>/
+        ├── gesture_landmarks.jsonl
+        ├── gesture_mlp.joblib
+        └── reports/
 ```
 
 ## Requirements

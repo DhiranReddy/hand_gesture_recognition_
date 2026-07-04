@@ -26,9 +26,11 @@ from src.constants import (
     COOLDOWN_FRAMES,
     HOLD_FRAMES,
 )
+from src.custom_dataset import append_sample, canonical_label
 from src.gesture_classifier import MODE_ALL, MODE_SPELL, MODE_WORDS
 from src.gesture_ensemble import EnsembleGestureRecognizer, result_to_text
 from src.hand_tracker import HandTracker
+from src.profile_paths import DEFAULT_PROFILE, dataset_path_for_profile, model_path_for_profile
 from src.word_processor import WordProcessor
 
 MODE_CYCLE = [MODE_ALL, MODE_WORDS, MODE_SPELL]
@@ -39,6 +41,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Hand gesture captions for video calls")
     parser.add_argument("--conference", action="store_true", help="Conference mode UI")
     parser.add_argument("--caption-only", action="store_true", help="Open caption strip window")
+    parser.add_argument(
+        "--profile",
+        default=DEFAULT_PROFILE,
+        help="Profile name for personalized model and dataset",
+    )
     return parser.parse_args()
 
 
@@ -53,8 +60,11 @@ def main() -> int:
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 960)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 540)
 
+    profile_model_path = model_path_for_profile(args.profile)
+    profile_dataset_path = dataset_path_for_profile(args.profile)
+
     tracker = HandTracker(max_hands=1)
-    recognizer = EnsembleGestureRecognizer()
+    recognizer = EnsembleGestureRecognizer(model_path=profile_model_path, dataset_path=profile_dataset_path)
     words = WordProcessor()
 
     recognition_mode = MODE_ALL
@@ -69,6 +79,11 @@ def main() -> int:
     cooldown = 0
     last_added = ""
     ml_confidence = 0.0
+    feedback_flash = 0
+    relabel_mode = False
+    relabel_text = ""
+    relabel_landmarks: list[tuple] | None = None
+    relabel_handedness = "Right"
 
     cv2.namedWindow("Hand Gesture Captions", cv2.WINDOW_NORMAL)
     cv2.resizeWindow("Hand Gesture Captions", 960, 640)
@@ -77,8 +92,11 @@ def main() -> int:
         cv2.resizeWindow("Captions for Meet/Zoom", 960, 160)
 
     print("Hand Gesture Caption App — custom ML mode enabled.")
+    print(f"Profile: {args.profile}")
+    print(f"Model: {profile_model_path}")
+    print(f"Feedback dataset: {profile_dataset_path}")
     print("Auto-spacing + spell correction active.")
-    print("Keys: M=mode  T=caption window  V=copy  H=hide mesh  G=guide  Q=quit")
+    print("Keys: M=mode  T=caption window  V=copy  H=hide mesh  G=guide  K=save sample  R=relabel sample  Q=quit")
 
     try:
         while True:
@@ -109,6 +127,8 @@ def main() -> int:
                 cooldown -= 1
             if copied_flash > 0:
                 copied_flash -= 1
+            if feedback_flash > 0:
+                feedback_flash -= 1
 
             if not detected_id:
                 if words.on_idle_frame():
@@ -149,6 +169,42 @@ def main() -> int:
             if detected_text and hold_count < hold_required:
                 draw_hold_progress(frame, progress, f"Hold: {detected_text}")
 
+            if feedback_flash > 0:
+                cv2.putText(
+                    frame,
+                    "Feedback sample saved",
+                    (20, frame.shape[0] - 20),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.58,
+                    (100, 255, 150),
+                    2,
+                    cv2.LINE_AA,
+                )
+
+            if relabel_mode:
+                cv2.rectangle(frame, (12, frame.shape[0] - 95), (540, frame.shape[0] - 10), (18, 18, 18), -1)
+                cv2.rectangle(frame, (12, frame.shape[0] - 95), (540, frame.shape[0] - 10), (90, 180, 220), 1)
+                cv2.putText(
+                    frame,
+                    "Correction mode: type label and press Enter",
+                    (22, frame.shape[0] - 66),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (220, 235, 245),
+                    1,
+                    cv2.LINE_AA,
+                )
+                cv2.putText(
+                    frame,
+                    f"Label: {relabel_text or '_'}",
+                    (22, frame.shape[0] - 34),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.64,
+                    (110, 255, 220),
+                    2,
+                    cv2.LINE_AA,
+                )
+
             output = draw_caption_bar(
                 frame,
                 words.display_transcript,
@@ -171,6 +227,38 @@ def main() -> int:
                 cv2.imshow("Captions for Meet/Zoom", caption_strip)
 
             key = cv2.waitKey(1) & 0xFF
+
+            if relabel_mode:
+                if key in (13, 10):
+                    if relabel_text and relabel_landmarks:
+                        append_sample(
+                            profile_dataset_path,
+                            label=canonical_label(relabel_text),
+                            handedness=relabel_handedness,
+                            landmarks=[
+                                (float(x), float(y), float(z)) for x, y, z in relabel_landmarks
+                            ],
+                        )
+                        feedback_flash = 50
+                        print(f"Saved correction sample: {canonical_label(relabel_text)}")
+                    relabel_mode = False
+                    relabel_text = ""
+                    relabel_landmarks = None
+                    continue
+                if key == 27:
+                    relabel_mode = False
+                    relabel_text = ""
+                    relabel_landmarks = None
+                    continue
+                if key in (8, 127):
+                    relabel_text = relabel_text[:-1]
+                    continue
+                if 32 <= key <= 126:
+                    ch = chr(key)
+                    if ch.isalnum() or ch == "_" or ch == " ":
+                        relabel_text += ch
+                    continue
+
             if key == ord("q"):
                 break
             if key == ord(" "):
@@ -203,6 +291,21 @@ def main() -> int:
                 conference_mode = not conference_mode
                 if conference_mode:
                     show_skeleton = False
+            if key == ord("k") and landmarks and detected_id:
+                append_sample(
+                    profile_dataset_path,
+                    label=detected_id,
+                    handedness=handedness,
+                    landmarks=[(float(x), float(y), float(z)) for x, y, z in landmarks],
+                )
+                feedback_flash = 50
+                print(f"Saved feedback sample from prediction: {detected_id}")
+            if key == ord("r") and landmarks:
+                relabel_mode = True
+                relabel_text = detected_id or ""
+                relabel_handedness = handedness
+                relabel_landmarks = [(float(x), float(y), float(z)) for x, y, z in landmarks]
+                print("Correction mode enabled. Type label and press Enter.")
 
     finally:
         recognizer.close()
