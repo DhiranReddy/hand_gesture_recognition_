@@ -6,7 +6,13 @@
     <title>Signal — Sign to Captions</title>
     <meta
       name="description"
-      content="Turn hand gestures into live captions for video calls. Runs entirely in your browser — your camera never leaves your device."
+      content="Turn hand gestures into live captions and speech for video calls. Runs entirely in your browser — your camera never leaves your device."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..700&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
     <link
@@ -16,143 +22,241 @@
   </head>
   <body>
     <header class="topbar">
-      <div class="brand">
-        <span class="brand-mark" aria-hidden="true">👋</span>
-        <div>
-          <h1>Signal</h1>
-          <p class="tagline">Sign to live captions</p>
-        </div>
-      </div>
-      <div class="topbar-actions">
-        <span class="privacy-badge" title="All recognition happens locally in this tab.">
-          <span class="dot" aria-hidden="true"></span> On-device
+      <a class="brand" href="./">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 13V4.5a1.5 1.5 0 0 1 3 0V11" />
+            <path d="M11 11V3.5a1.5 1.5 0 0 1 3 0V11" />
+            <path d="M14 11.5V5.5a1.5 1.5 0 0 1 3 0V13" />
+            <path d="M17 8.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-2a6 6 0 0 1-6-6v-1l-2.2-3.3a1.5 1.5 0 0 1 2.4-1.8L8 11" />
+          </svg>
         </span>
-        <button type="button" id="help-btn" class="ghost-btn" aria-expanded="false">
-          Gesture guide
+        <span class="brand-text">
+          <span class="brand-name">Signal</span>
+          <span class="brand-tag">Sign to captions</span>
+        </span>
+      </a>
+
+      <div class="topbar-actions">
+        <span class="badge" title="Recognition runs locally. No video is uploaded.">
+          <span class="badge-dot" aria-hidden="true"></span>On-device
+        </span>
+        <button type="button" id="theme-btn" class="icon-btn" title="Switch theme"
+                aria-label="Switch theme">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+               stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4.2" />
+            <path d="M12 2.6v2.2M12 19.2v2.2M21.4 12h-2.2M4.8 12H2.6M18.6 5.4l-1.6 1.6M7 17l-1.6 1.6M18.6 18.6 17 17M7 7 5.4 5.4" />
+          </svg>
         </button>
+        <button type="button" id="guide-btn" class="btn btn-quiet">Gesture guide</button>
       </div>
     </header>
 
     <main>
-      <section class="stage" aria-label="Camera and recognition">
-        <div class="video-wrap" id="video-wrap">
+      <section class="stage">
+        <div class="viewport" id="viewport">
           <video id="video" playsinline muted aria-hidden="true"></video>
           <canvas id="overlay"></canvas>
+          <div class="viewport-vignette" aria-hidden="true"></div>
 
-          <div class="idle-panel" id="idle-panel">
-            <h2>Ready when you are</h2>
-            <p>
-              Signal reads your hand from the camera and writes what you sign.
-              Nothing is uploaded — recognition runs inside this tab.
-            </p>
-            <button type="button" id="start-btn" class="primary-btn">
-              Enable camera
-            </button>
-            <p class="idle-note" id="idle-note">Requires a webcam and a modern browser.</p>
+          <div class="onboard" id="onboard">
+            <div class="onboard-inner">
+              <span class="eyebrow">Live captioning</span>
+              <h2>Say it with your hands.</h2>
+              <p>
+                Signal reads your hand, writes what you sign, and can speak it
+                aloud. Everything happens inside this tab — no video is ever
+                uploaded.
+              </p>
+              <button type="button" id="start-btn" class="btn btn-primary btn-lg">
+                Enable camera
+              </button>
+              <p class="onboard-note" id="onboard-note">
+                Works in Chrome, Edge, and Safari on <code>localhost</code> or HTTPS.
+              </p>
+            </div>
           </div>
 
-          <div class="hud" id="hud" hidden>
-            <div class="hud-chip" id="fps-chip">— fps</div>
-            <div class="hud-chip" id="pred-chip">No hand detected</div>
+          <div class="hud hud-top" id="hud" hidden>
+            <span class="pill" id="fps-pill">— fps</span>
+            <span class="pill pill-mode" id="mode-pill">All gestures</span>
           </div>
 
-          <div class="hold-indicator" id="hold-indicator" hidden>
-            <svg viewBox="0 0 44 44" aria-hidden="true">
-              <circle class="hold-track" cx="22" cy="22" r="19" />
-              <circle class="hold-fill" id="hold-fill" cx="22" cy="22" r="19" />
+          <div class="readout" id="readout" hidden>
+            <div class="readout-row">
+              <span class="readout-label" id="readout-label">Reading…</span>
+              <span class="readout-pct" id="readout-pct"></span>
+            </div>
+            <div class="meter" aria-hidden="true"><i id="readout-meter"></i></div>
+          </div>
+
+          <div class="hold" id="hold" hidden>
+            <svg viewBox="0 0 48 48" aria-hidden="true">
+              <circle class="hold-track" cx="24" cy="24" r="20.5" />
+              <circle class="hold-fill" id="hold-fill" cx="24" cy="24" r="20.5" />
             </svg>
-            <span id="hold-label">Hold</span>
+            <span id="hold-text">Hold</span>
           </div>
         </div>
 
-        <div class="caption-panel">
-          <div class="caption-head">
-            <span class="caption-title">Captions</span>
-            <span class="caption-correction" id="correction" aria-live="polite"></span>
+        <div class="card caption-card">
+          <div class="card-head">
+            <h2 class="card-title">Captions</h2>
+            <div class="card-head-right">
+              <span class="note" id="correction" aria-live="polite"></span>
+              <button type="button" id="speak-all-btn" class="btn btn-quiet btn-sm">
+                Read aloud
+              </button>
+            </div>
           </div>
-          <p
-            class="caption-text"
-            id="caption-text"
-            role="status"
-            aria-live="polite"
-            aria-atomic="false"
-          >
-            <span class="caption-placeholder">Your signed words appear here…</span>
+          <p class="caption" id="caption" role="status" aria-live="polite" aria-atomic="false">
+            <span class="caption-empty">Your signed words appear here…</span>
           </p>
-          <p class="caption-preview" id="caption-preview" aria-hidden="true"></p>
+          <p class="caption-sub" id="caption-sub">&nbsp;</p>
+        </div>
+
+        <div class="card history-card">
+          <div class="card-head">
+            <h2 class="card-title">Session log</h2>
+            <button type="button" id="download-btn" class="btn btn-quiet btn-sm">
+              Download
+            </button>
+          </div>
+          <ol class="history" id="history">
+            <li class="history-empty">Committed words will be listed here with timestamps.</li>
+          </ol>
         </div>
       </section>
 
       <aside class="sidebar">
-        <div class="panel">
-          <h2>Controls</h2>
-          <div class="control-grid">
-            <button type="button" id="space-btn" class="ghost-btn">Space</button>
-            <button type="button" id="back-btn" class="ghost-btn">Backspace</button>
-            <button type="button" id="copy-btn" class="ghost-btn">Copy</button>
-            <button type="button" id="clear-btn" class="ghost-btn danger">Clear</button>
+        <div class="card">
+          <h2 class="card-title">Recognition</h2>
+          <div class="segmented" role="radiogroup" aria-label="Recognition mode">
+            <button type="button" role="radio" aria-checked="true" data-mode="all" class="seg on">All</button>
+            <button type="button" role="radio" aria-checked="false" data-mode="words" class="seg">Words</button>
+            <button type="button" role="radio" aria-checked="false" data-mode="letters" class="seg">Letters</button>
           </div>
-          <label class="toggle">
-            <input type="checkbox" id="skeleton-toggle" checked />
-            <span>Show hand skeleton</span>
+          <p class="hint" id="mode-hint">
+            Everything at once. Switch to Letters when fingerspelling a name.
+          </p>
+
+          <label class="field">
+            <span class="field-label">Hold to confirm <output id="hold-out">0.33s</output></span>
+            <input type="range" id="hold-range" min="150" max="1500" step="10" value="330" />
           </label>
-          <label class="toggle">
-            <input type="checkbox" id="mirror-toggle" checked />
-            <span>Mirror video</span>
-          </label>
-          <label class="slider">
-            <span
-              >Hold time <output id="hold-out">0.33s</output></span
-            >
-            <input type="range" id="hold-range" min="150" max="1200" step="10" value="330" />
-          </label>
-          <label class="slider">
-            <span>Pause before space <output id="pause-out">0.73s</output></span>
-            <input type="range" id="pause-range" min="300" max="2500" step="10" value="730" />
+          <label class="field">
+            <span class="field-label">Pause for space <output id="pause-out">0.73s</output></span>
+            <input type="range" id="pause-range" min="300" max="3000" step="10" value="730" />
           </label>
         </div>
 
-        <div class="panel">
-          <h2>Presentation</h2>
-          <p class="panel-note">
-            Open a clean caption window and share just that window in Zoom, Meet,
-            or Teams.
+        <div class="card">
+          <h2 class="card-title">Voice</h2>
+          <label class="switch">
+            <input type="checkbox" id="speak-toggle" />
+            <span class="switch-track" aria-hidden="true"><i></i></span>
+            <span class="switch-text">Speak each word aloud</span>
+          </label>
+          <div id="voice-fields" hidden>
+            <label class="field">
+              <span class="field-label">Voice</span>
+              <select id="voice-select" class="select"></select>
+            </label>
+            <label class="field">
+              <span class="field-label">Rate <output id="rate-out">1.0×</output></span>
+              <input type="range" id="rate-range" min="0.6" max="1.6" step="0.05" value="1" />
+            </label>
+          </div>
+          <p class="hint" id="voice-hint" hidden>
+            This browser has no speech voices available.
           </p>
-          <button type="button" id="present-btn" class="primary-btn wide">
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">Transcript</h2>
+          <div class="btn-grid">
+            <button type="button" id="space-btn" class="btn btn-quiet">Space</button>
+            <button type="button" id="undo-btn" class="btn btn-quiet" disabled>Undo</button>
+            <button type="button" id="back-btn" class="btn btn-quiet">Backspace</button>
+            <button type="button" id="copy-btn" class="btn btn-quiet">Copy</button>
+          </div>
+          <button type="button" id="clear-btn" class="btn btn-quiet btn-block btn-danger">
+            Clear transcript
+          </button>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">Presenting</h2>
+          <p class="hint hint-tight">
+            Opens a clean caption window sized for screen-sharing into Zoom,
+            Meet, or Teams.
+          </p>
+          <button type="button" id="present-btn" class="btn btn-primary btn-block">
             Open caption window
           </button>
         </div>
 
-        <div class="panel" id="status-panel">
-          <h2>Status</h2>
-          <dl class="status-list">
-            <div><dt>Model</dt><dd id="status-model">not loaded</dd></div>
-            <div><dt>Labels</dt><dd id="status-labels">—</dd></div>
+        <div class="card">
+          <h2 class="card-title">Camera &amp; status</h2>
+          <label class="field" id="camera-field" hidden>
+            <span class="field-label">Source</span>
+            <select id="camera-select" class="select"></select>
+          </label>
+          <label class="switch">
+            <input type="checkbox" id="skeleton-toggle" checked />
+            <span class="switch-track" aria-hidden="true"><i></i></span>
+            <span class="switch-text">Hand skeleton</span>
+          </label>
+          <label class="switch">
+            <input type="checkbox" id="mirror-toggle" checked />
+            <span class="switch-track" aria-hidden="true"><i></i></span>
+            <span class="switch-text">Mirror video</span>
+          </label>
+          <dl class="status">
+            <div><dt>Recognizer</dt><dd id="status-model">loading…</dd></div>
+            <div><dt>Vocabulary</dt><dd id="status-labels">—</dd></div>
             <div><dt>Camera</dt><dd id="status-camera">off</dd></div>
           </dl>
         </div>
       </aside>
     </main>
 
-    <dialog id="help-dialog">
+    <dialog id="guide-dialog">
       <div class="dialog-head">
-        <h2>What you can sign</h2>
-        <button type="button" id="help-close" class="ghost-btn" aria-label="Close">✕</button>
+        <h2>Gesture guide</h2>
+        <button type="button" id="guide-close" class="icon-btn" aria-label="Close guide">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+               stroke-linecap="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
       </div>
       <div class="dialog-body">
-        <p>
-          Hold a shape steady until the ring fills. Letters collect into a word;
-          pause briefly and the word is committed with a space.
+        <p class="dialog-intro">
+          Hold a shape until the ring closes. Letters gather into a word; pause
+          and the word is committed, spell-checked, and spaced automatically.
         </p>
-        <div id="label-groups"></div>
+        <input
+          type="search"
+          id="guide-search"
+          class="search"
+          placeholder="Search letters, numbers, or phrases…"
+          aria-label="Search gestures"
+        />
+        <div id="guide-groups"></div>
         <h3>Keyboard</h3>
-        <ul class="keylist">
+        <ul class="keys">
           <li><kbd>Space</kbd> insert a space</li>
-          <li><kbd>Backspace</kbd> delete last character</li>
+          <li><kbd>⌫</kbd> delete last character</li>
+          <li><kbd>⌘Z</kbd> undo</li>
           <li><kbd>C</kbd> clear transcript</li>
           <li><kbd>V</kbd> copy transcript</li>
+          <li><kbd>S</kbd> read transcript aloud</li>
           <li><kbd>H</kbd> toggle skeleton</li>
-          <li><kbd>?</kbd> this guide</li>
+          <li><kbd>M</kbd> cycle recognition mode</li>
+          <li><kbd>?</kbd> open this guide</li>
         </ul>
       </div>
     </dialog>

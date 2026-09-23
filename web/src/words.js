@@ -84,6 +84,8 @@ export class SpellCorrector {
   }
 }
 
+const UNDO_DEPTH = 60;
+
 export class WordProcessor {
   constructor(corrector, { pauseMs = PAUSE_MS } = {}) {
     this.corrector = corrector;
@@ -93,6 +95,29 @@ export class WordProcessor {
     this.preview = "";
     this.lastCorrection = "";
     this.idleSince = null;
+    this.history = [];
+    /** Set by flush() so the UI can speak or log only newly committed words. */
+    this.lastCommitted = "";
+  }
+
+  /** Snapshot before any destructive edit so undo can step back one action. */
+  #snapshot() {
+    this.history.push({ transcript: this.transcript, buffer: this.buffer });
+    if (this.history.length > UNDO_DEPTH) this.history.shift();
+  }
+
+  undo() {
+    const previous = this.history.pop();
+    if (!previous) return false;
+    this.transcript = previous.transcript;
+    this.buffer = previous.buffer;
+    this.lastCorrection = "";
+    this.idleSince = null;
+    return true;
+  }
+
+  get canUndo() {
+    return this.history.length > 0;
   }
 
   get displayTranscript() {
@@ -130,23 +155,33 @@ export class WordProcessor {
 
   addGesture(text, category) {
     this.idleSince = null;
+    this.lastCommitted = "";
     const isChar = category === "letter" || category === "number"
       || (text.length === 1 && /[a-z0-9]/i.test(text));
 
+    this.#snapshot();
     if (isChar) {
       this.buffer += /[a-z]/i.test(text) ? text.toUpperCase() : text;
       return;
     }
-    this.flush();
+    this.#flushInternal();
     this.#append(text);
+    this.lastCommitted = text;
   }
 
   flush() {
+    if (!this.buffer) return;
+    this.#snapshot();
+    this.#flushInternal();
+  }
+
+  #flushInternal() {
     if (!this.buffer) return;
     const raw = this.buffer;
     const corrected = this.corrector ? this.corrector.correct(raw) : raw.toLowerCase();
     this.lastCorrection = corrected.toLowerCase() !== raw.toLowerCase() ? corrected : "";
     this.#append(corrected);
+    this.lastCommitted = corrected;
     this.buffer = "";
     this.idleSince = null;
   }
@@ -158,20 +193,25 @@ export class WordProcessor {
   }
 
   addSpace() {
-    this.flush();
+    this.#snapshot();
+    this.#flushInternal();
     if (this.transcript && !this.transcript.endsWith(" ")) this.transcript += " ";
   }
 
   backspace() {
+    if (!this.buffer && !this.transcript) return;
+    this.#snapshot();
     if (this.buffer) this.buffer = this.buffer.slice(0, -1);
-    else if (this.transcript) this.transcript = this.transcript.slice(0, -1);
+    else this.transcript = this.transcript.slice(0, -1);
   }
 
   clear() {
+    if (this.transcript || this.buffer) this.#snapshot();
     this.transcript = "";
     this.buffer = "";
     this.preview = "";
     this.lastCorrection = "";
+    this.lastCommitted = "";
     this.idleSince = null;
   }
 }

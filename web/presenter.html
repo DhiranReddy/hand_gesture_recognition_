@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Signal — Captions</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..700&family=Inter:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #16110b;
+        --fg: #f7efe2;
+        --dim: #9c8b74;
+        --clay: #d9a06a;
+      }
+      /* Light is offered too — some people share onto a bright slide deck. */
+      :root[data-theme="light"] {
+        --bg: #faf6ef;
+        --fg: #241e17;
+        --dim: #857868;
+        --clay: #a4673d;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 14px;
+        padding: 4vh 5vw;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        cursor: default;
+      }
+      #caption {
+        font-family: "Fraunces", ui-serif, Georgia, serif;
+        font-size: clamp(30px, 8.5vw, 86px);
+        font-weight: 500;
+        font-variation-settings: "opsz" 144;
+        line-height: 1.14;
+        letter-spacing: -0.026em;
+        overflow-wrap: anywhere;
+        max-height: 78vh;
+        overflow-y: auto;
+        scrollbar-width: none;
+      }
+      #caption::-webkit-scrollbar { display: none; }
+      #caption.idle {
+        font-family: "Inter", sans-serif;
+        font-size: clamp(16px, 2.6vw, 26px);
+        font-weight: 400;
+        letter-spacing: 0;
+        color: var(--dim);
+      }
+      .live {
+        color: var(--clay);
+        border-bottom: 3px solid color-mix(in srgb, var(--clay) 40%, transparent);
+      }
+      .bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 11px;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+        color: var(--dim);
+      }
+      .bar button {
+        font: inherit;
+        letter-spacing: inherit;
+        text-transform: inherit;
+        color: inherit;
+        background: none;
+        border: 1px solid color-mix(in srgb, var(--dim) 40%, transparent);
+        border-radius: 999px;
+        padding: 4px 11px;
+        cursor: pointer;
+      }
+      .bar button:hover { color: var(--fg); border-color: var(--fg); }
+      .dot {
+        display: inline-block;
+        width: 6px; height: 6px;
+        margin-right: 7px;
+        border-radius: 50%;
+        background: var(--clay);
+      }
+      @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+    </style>
+  </head>
+  <body>
+    <p id="caption" class="idle">Waiting for captions…</p>
+    <div class="bar">
+      <span><span class="dot"></span><span id="state">Connected</span></span>
+      <button type="button" id="theme">Invert</button>
+    </div>
+
+    <script type="module">
+      const caption = document.getElementById("caption");
+      const state = document.getElementById("state");
+
+      function render({ text = "", live = "" } = {}) {
+        caption.replaceChildren();
+        const committed = text.trim();
+        if (!committed && !live) {
+          caption.className = "idle";
+          caption.textContent = "Waiting for captions…";
+          return;
+        }
+        caption.className = "";
+        if (committed) caption.append(document.createTextNode(committed));
+        if (live) {
+          if (committed) caption.append(document.createTextNode(" "));
+          const span = document.createElement("span");
+          span.className = "live";
+          span.textContent = live;
+          caption.append(span);
+        }
+        caption.scrollTop = caption.scrollHeight;
+      }
+
+      const channel = new BroadcastChannel("signal-captions");
+      channel.onmessage = (event) => render(event.data);
+
+      // The opener may have closed or reloaded; say so rather than sitting blank.
+      window.addEventListener("beforeunload", () => channel.close());
+      setInterval(() => {
+        const alive = window.opener && !window.opener.closed;
+        state.textContent = alive ? "Connected" : "Disconnected";
+      }, 2000);
+
+      document.getElementById("theme").addEventListener("click", () => {
+        const root = document.documentElement;
+        root.dataset.theme = root.dataset.theme === "light" ? "dark" : "light";
+      });
+    </script>
+  </body>
+</html>

@@ -14,13 +14,26 @@ Real-time assistive communication for people who cannot speak. Show hand gesture
 The web app is the shippable product; the Python side is the training toolchain
 that produces the model it runs.
 
+### Web app features
+
+- **Live captions** with a large serif display, plus the in-progress buffer shown inline
+- **Speech output** — speak each committed word, or read the whole transcript aloud
+- **Recognition modes** — All / Words / Letters; narrowing to Letters stops `2` and `V` competing
+- **Presenter window** — a clean caption-only window to screen-share into a call
+- **Session log** with timestamps, copy, and download
+- **Undo** (⌘Z) on every edit, plus adjustable hold and pause timing
+- **Gesture guide** with searchable hand-shape descriptions, flagged for motion letters and look-alike shapes
+- Light/dark themes, camera picker, and settings that persist across reloads
+
 ### Run the web app locally
 
 ```bash
-python3 -m http.server 4173 --directory web
+python3 tools/devserver.py
 ```
 
 Then open <http://localhost:4173>. Camera access needs `localhost` or HTTPS.
+The dev server sends `no-store` so edits show up without fighting the browser
+cache; production caching is configured in `vercel.json`.
 
 ### Deploy it
 

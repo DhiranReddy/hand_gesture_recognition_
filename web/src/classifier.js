@@ -14,6 +14,10 @@ const MIN_MARGIN = 0.1;
 const SMOOTH_WINDOW = 5;
 const MIN_VOTES = 3;
 
+export const MODE_ALL = "all";
+export const MODE_WORDS = "words";
+export const MODE_LETTERS = "letters";
+
 function relu(v) {
   for (let i = 0; i < v.length; i += 1) {
     if (v[i] < 0) v[i] = 0;
@@ -68,6 +72,7 @@ export class GestureClassifier {
     // Registering the exported phrase table keeps display text identical to the
     // Python app ("I don't understand", not "Dont Understand").
     registerDisplayNames(spec.display_names);
+    this.setMode(MODE_ALL);
   }
 
   static async load(url) {
@@ -76,6 +81,21 @@ export class GestureClassifier {
       throw new Error(`Could not load model (${response.status}) from ${url}`);
     }
     return new GestureClassifier(await response.json());
+  }
+
+  /**
+   * Restrict which labels can be returned. Narrowing to letters or words makes
+   * fingerspelling far more reliable, because visually similar shapes across
+   * categories (2 vs V, O vs 0) stop competing.
+   */
+  setMode(mode) {
+    this.mode = mode;
+    this.allowed = this.labels.map((label) => {
+      if (mode === MODE_WORDS) return label.length > 1;
+      if (mode === MODE_LETTERS) return label.length === 1;
+      return true;
+    });
+    this.reset();
   }
 
   /** Raw single-frame prediction with no smoothing. */
@@ -87,14 +107,18 @@ export class GestureClassifier {
     }
     const probs = softmax(activations);
 
-    let best = 0;
+    let best = -1;
     let second = -1;
-    for (let i = 1; i < probs.length; i += 1) {
-      if (probs[i] > probs[best]) best = i;
-    }
     for (let i = 0; i < probs.length; i += 1) {
-      if (i !== best && (second === -1 || probs[i] > probs[second])) second = i;
+      if (!this.allowed[i]) continue;
+      if (best === -1 || probs[i] > probs[best]) {
+        second = best;
+        best = i;
+      } else if (second === -1 || probs[i] > probs[second]) {
+        second = i;
+      }
     }
+    if (best === -1) return { label: null, confidence: 0 };
 
     const confidence = probs[best];
     const margin = second === -1 ? confidence : confidence - probs[second];
