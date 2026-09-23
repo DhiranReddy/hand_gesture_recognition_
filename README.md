@@ -342,11 +342,34 @@ profiles/
 - Webcam
 - macOS, Linux, or Windows
 
-## Improving recognition
+## Recognition
 
-The shipped model was trained on other people's hands and its training set is
-missing, so its accuracy on any given person is unknown and cannot be improved
-by retraining. The web app works around this with **personal calibration**:
+### The bundled model is broken
+
+`models/gesture_mlp.joblib` is degenerate. Probed across 3000 hand poses:
+
+| measure | value |
+|---|---|
+| inputs answered `HELP` | **61%** |
+| labels never predicted | **20 of 47** (incl. A D E M O R S T U W X 0 2 6 9) |
+| mean top probability | 0.570 (gate is 0.56) |
+
+It answers `HELP` at 0.94 confidence for a plain V sign. Its training set is
+missing and its architecture does not match `_build_classifier()`, so it can be
+neither retrained nor evaluated. Reproduce with `tools/diagnose_model.py`.
+
+**The web app therefore does not use it by default.** Recognition runs on the
+ported geometric rules, with the model available behind a toggle.
+
+### What the web app uses instead
+
+1. **Your calibration samples**, when you have recorded any (highest priority)
+2. **Geometric rules** — `web/src/rules.js`, a port of `asl_alphabet.py`,
+   `asl_numbers.py` and the phrase rules, verified against the Python originals
+   by `tools/check_rules_parity.py` (0 mismatches over 600 hands)
+3. **The bundled model** — off by default, and even when on must clear 0.8
+
+### Personal calibration
 
 1. Pick a gesture under *Teach your hand*.
 2. Hold the shape and press **Record** — 15 samples, moving your hand slightly.
@@ -366,8 +389,10 @@ removes the cross-category collisions.
 ```bash
 pip install pytest
 python -m pytest tests/ -q          # feature invariants, buffering, datasets
-node --test "web/test/*.test.mjs"   # calibration k-NN
-python tools/check_web_parity.py    # JS inference == Python inference
+node --test "web/test/*.test.mjs"   # calibration k-NN, fusion policy
+python tools/check_web_parity.py    # JS features/model == Python
+python tools/check_rules_parity.py  # JS rules == Python rules
+python tools/diagnose_model.py      # is a trained model actually usable?
 ```
 
 Covers feature-extraction invariants (translation/scale/handedness), the

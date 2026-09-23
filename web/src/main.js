@@ -18,13 +18,14 @@ import {
   MODE_ALL,
   MODE_WORDS,
   MODE_LETTERS,
-} from "./classifier.js?v=5";
-import { SpellCorrector, WordProcessor } from "./words.js?v=5";
-import { Speaker } from "./speech.js?v=5";
-import { groupLabels, shapeFor, MOTION_LETTERS, CONFUSABLE } from "./guide.js?v=5";
-import { renderHand, hasDiagram, COLLISIONS } from "./handshape.js?v=5";
-import { Calibration, MIN_SAMPLES } from "./calibration.js?v=5";
-import { landmarksToFeatures } from "./features.js?v=5";
+} from "./classifier.js?v=6";
+import { SpellCorrector, WordProcessor } from "./words.js?v=6";
+import { Speaker } from "./speech.js?v=6";
+import { groupLabels, shapeFor, MOTION_LETTERS, CONFUSABLE } from "./guide.js?v=6";
+import { renderHand, hasDiagram, COLLISIONS } from "./handshape.js?v=6";
+import { Calibration, MIN_SAMPLES } from "./calibration.js?v=6";
+import { landmarksToFeatures } from "./features.js?v=6";
+import { Recognizer } from "./recognizer.js?v=6";
 
 const WASM_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm";
 const LANDMARKER_TASK =
@@ -64,7 +65,7 @@ const dom = Object.fromEntries(
     "readout-meter", "hold", "hold-fill", "hold-text",
     "caption", "caption-sub", "correction", "speak-all-btn",
     "history", "download-btn",
-    "mode-hint", "hold-range", "hold-out", "pause-range", "pause-out",
+    "mode-hint", "model-toggle", "hold-range", "hold-out", "pause-range", "pause-out",
     "speak-toggle", "voice-fields", "voice-select", "rate-range", "rate-out",
     "voice-hint",
     "space-btn", "undo-btn", "back-btn", "copy-btn", "clear-btn", "present-btn",
@@ -90,6 +91,7 @@ const defaults = {
   skeleton: true,
   mirror: true,
   cameraId: null,
+  useModel: false,
 };
 
 function loadSettings() {
@@ -113,6 +115,7 @@ const settings = loadSettings();
 const state = {
   landmarker: null,
   classifier: null,
+  recognizer: null,
   words: null,
   speaker: new Speaker(),
   stream: null,
@@ -176,7 +179,9 @@ async function loadAssets() {
   });
 
   state.classifier = classifier;
-  classifier.setMode(settings.mode);
+  state.recognizer = new Recognizer({ classifier, calibration: state.calibration });
+  state.recognizer.useModel = settings.useModel;
+  state.recognizer.setMode(settings.mode);
   state.words = new WordProcessor(corrector, { pauseMs: settings.pauseMs });
 
   setStatus(dom.statusModel, "ready", "ok");
@@ -510,32 +515,19 @@ function loop() {
  * does not repeat it.
  */
 function step(landmarks, handedness, now) {
-  const { classifier, words, calibration } = state;
-  let { label, confidence } = classifier.recognize(
+  const { recognizer, words } = state;
+  const { label, confidence, category, source } = recognizer.recognize(
     landmarks,
     handedness,
     dom.overlay.width,
     dom.overlay.height,
   );
-  let personalised = false;
 
-  // Your own recorded samples outrank the shipped model, which never saw your
-  // hand. Features are only extracted when something actually needs them.
-  if (landmarks && (state.recording || calibration.isActive)) {
-    const features = landmarksToFeatures(
-      landmarks,
-      handedness,
-      dom.overlay.width,
-      dom.overlay.height,
+  if (landmarks && state.recording) {
+    captureSample(
+      landmarksToFeatures(landmarks, handedness, dom.overlay.width, dom.overlay.height),
+      now,
     );
-    if (state.recording) captureSample(features, now);
-
-    const personal = calibration.predict(features);
-    if (personal && personal.confidence >= 0.6 && classifier.isAllowed(personal.label)) {
-      label = personal.label;
-      confidence = personal.confidence;
-      personalised = true;
-    }
   }
 
   // Recording should not also be typing.
@@ -565,7 +557,8 @@ function step(landmarks, handedness, now) {
     return;
   }
 
-  dom.readoutLabel.textContent = personalised ? `${text} \u00b7 yours` : text;
+  dom.readoutLabel.textContent =
+    source === "you" ? `${text} \u00b7 yours` : text;
   dom.readoutPct.textContent = `${Math.round(confidence * 100)}%`;
   dom.readoutMeter.style.width = `${Math.round(confidence * 100)}%`;
   words.setPreview(text);
@@ -581,7 +574,7 @@ function step(landmarks, handedness, now) {
   dom.holdFill.style.strokeDashoffset = String(HOLD_CIRCUMFERENCE * (1 - progress));
 
   if (progress >= 1 && now >= state.cooldownUntil && text !== state.lastCommitted) {
-    words.addGesture(text, categoryFor(label));
+    words.addGesture(text, category);
     state.lastCommitted = text;
     state.cooldownUntil = now + COOLDOWN_MS;
     state.holdStart = now;
@@ -710,7 +703,7 @@ function stopRecording() {
   const rec = state.recording;
   state.recording = null;
   dom.calibStatus.hidden = true;
-  state.classifier?.reset();
+  state.recognizer?.reset();
   refreshCalibrationUI();
 
   if (!rec) return;
@@ -763,7 +756,7 @@ function render() {
 function setMode(mode) {
   settings.mode = mode;
   saveSettings();
-  state.classifier?.setMode(mode);
+  state.recognizer?.setMode(mode);
   dom.modePill.textContent = MODE_PILLS[mode];
   dom.modeHint.textContent = MODE_HINTS[mode];
   document.querySelectorAll(".seg").forEach((btn) => {
@@ -806,6 +799,7 @@ function applySettingsToUI() {
   dom.mirrorToggle.checked = settings.mirror;
   dom.viewport.classList.toggle("mirrored", settings.mirror);
 
+  dom.modelToggle.checked = settings.useModel;
   dom.speakToggle.checked = settings.speak;
   dom.voiceFields.hidden = !settings.speak;
   dom.rateRange.value = settings.rate;
@@ -965,12 +959,22 @@ function wire() {
     saveSettings();
   });
 
+  dom.modelToggle.addEventListener("change", (e) => {
+    settings.useModel = e.target.checked;
+    if (state.recognizer) {
+      state.recognizer.useModel = settings.useModel;
+      state.recognizer.reset();
+    }
+    saveSettings();
+    toast(settings.useModel ? "Bundled model enabled" : "Using shape rules only");
+  });
+
   dom.calibSelect.addEventListener("change", refreshCalibrationUI);
   dom.calibRecord.addEventListener("click", startRecording);
   dom.calibForget.addEventListener("click", () => {
     const label = dom.calibSelect.value;
     state.calibration.clear(label);
-    state.classifier?.reset();
+    state.recognizer?.reset();
     refreshCalibrationUI();
     toast(`Forgot your samples for ${labelToText(label)}`);
   });

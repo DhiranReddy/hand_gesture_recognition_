@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..700&family=Inter:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=5" />
+    <link rel="stylesheet" href="./styles.css?v=6" />
     <link
       rel="icon"
       href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👋</text></svg>"
@@ -140,6 +140,17 @@
           </div>
           <p class="hint" id="mode-hint">
             Everything at once. Switch to Letters when fingerspelling a name.
+          </p>
+
+          <label class="switch">
+            <input type="checkbox" id="model-toggle" />
+            <span class="switch-track" aria-hidden="true"><i></i></span>
+            <span class="switch-text">Also use bundled model</span>
+          </label>
+          <p class="hint hint-tight">
+            Off by default. The bundled model answers “Help” for most shapes and
+            never produces 20 of its 47 labels, so recognition relies on shape
+            rules and anything you have taught it.
           </p>
 
           <label class="field">
@@ -339,6 +350,6 @@
         }, 15000);
       })();
     </script>
-    <script type="module" src="./src/main.js?v=5"></script>
+    <script type="module" src="./src/main.js?v=6"></script>
   </body>
 </html>
