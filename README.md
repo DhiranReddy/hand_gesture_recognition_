@@ -32,8 +32,12 @@ python3 tools/devserver.py
 ```
 
 Then open <http://localhost:4173>. Camera access needs `localhost` or HTTPS.
-The dev server sends `no-store` so edits show up without fighting the browser
-cache; production caching is configured in `vercel.json`.
+
+**If the page looks stale after an update, hard-reload once** — `Cmd+Shift+R`
+(macOS) or `Ctrl+Shift+R` (Windows/Linux). A cache entry created before the dev
+server started sending `no-store` is never revalidated, so the browser will keep
+serving it until you bypass the cache once. After that it stays fresh: the dev
+server sends `no-store` and asset URLs carry a `?v=` version.
 
 ### Deploy it
 

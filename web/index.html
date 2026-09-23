@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..700&family=Inter:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=2" />
     <link
       rel="icon"
       href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👋</text></svg>"
@@ -263,6 +263,53 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-    <script type="module" src="./src/main.js"></script>
+    <!-- Plain script, not a module: it must still run when module loading is
+         exactly what failed (opening the file directly, or a blocked CDN). -->
+    <script>
+      (function () {
+        var note = document.getElementById("onboard-note");
+        var btn = document.getElementById("start-btn");
+
+        function fail(html) {
+          if (note) note.innerHTML = html;
+          if (btn) btn.disabled = true;
+        }
+
+        if (location.protocol === "file:") {
+          fail(
+            "Signal has to be served over http — opening the file directly " +
+              "blocks ES modules and the camera. Run " +
+              "<code>python3 tools/devserver.py</code> and open " +
+              "<code>http://localhost:4173</code>.",
+          );
+          return;
+        }
+
+        window.addEventListener(
+          "error",
+          function (event) {
+            if (event.target && event.target.tagName === "SCRIPT") {
+              fail(
+                "The app scripts failed to load. If you are offline, the " +
+                  "MediaPipe CDN is unreachable. Check the browser console.",
+              );
+            }
+          },
+          true,
+        );
+
+        // If the module never boots, say so rather than sitting on "loading…".
+        setTimeout(function () {
+          var status = document.getElementById("status-model");
+          if (status && status.textContent === "loading…") {
+            fail(
+              "The recognizer did not start. Hard-reload the page " +
+                "(<code>Cmd/Ctrl + Shift + R</code>) to clear a cached old copy.",
+            );
+          }
+        }, 15000);
+      })();
+    </script>
+    <script type="module" src="./src/main.js?v=2"></script>
   </body>
 </html>

@@ -18,10 +18,10 @@ import {
   MODE_ALL,
   MODE_WORDS,
   MODE_LETTERS,
-} from "./classifier.js";
-import { SpellCorrector, WordProcessor } from "./words.js";
-import { Speaker } from "./speech.js";
-import { groupLabels, shapeFor, MOTION_LETTERS, CONFUSABLE } from "./guide.js";
+} from "./classifier.js?v=2";
+import { SpellCorrector, WordProcessor } from "./words.js?v=2";
+import { Speaker } from "./speech.js?v=2";
+import { groupLabels, shapeFor, MOTION_LETTERS, CONFUSABLE } from "./guide.js?v=2";
 
 const WASM_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm";
 const LANDMARKER_TASK =
