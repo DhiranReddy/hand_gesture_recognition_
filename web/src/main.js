@@ -14,13 +14,15 @@ import {
   MODE_ALL,
   MODE_WORDS,
   MODE_LETTERS,
-} from "./classifier.js?v=12";
-import { SpellCorrector, WordProcessor } from "./words.js?v=12";
-import { Speaker } from "./speech.js?v=12";
-import { groupLabels, shapeFor, MOTION_LETTERS, CONFUSABLE, VOCABULARY } from "./guide.js?v=12";
-import { renderHand, hasDiagram, COLLISIONS } from "./handshape.js?v=12";
-import { Calibration, MIN_SAMPLES } from "./calibration.js?v=12";
-import { Recognizer } from "./recognizer.js?v=12";
+} from "./classifier.js?v=13";
+import { SpellCorrector, WordProcessor } from "./words.js?v=13";
+import { Speaker } from "./speech.js?v=13";
+import {
+  groupLabels, shapeFor, MOTION_LETTERS, CONFUSABLE, VOCABULARY, PHRASE_REASONS,
+} from "./guide.js?v=13";
+import { renderHand, hasDiagram, COLLISIONS } from "./handshape.js?v=13";
+import { Calibration, MIN_SAMPLES } from "./calibration.js?v=13";
+import { Recognizer } from "./recognizer.js?v=13";
 
 const TASKS_VERSION = "0.10.18";
 const CDN = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TASKS_VERSION}`;
@@ -232,6 +234,7 @@ function buildGuide(labels) {
       shape: shapeFor(label),
       motion: MOTION_LETTERS.has(label),
       confusable: CONFUSABLE.has(label),
+      reason: PHRASE_REASONS[label] || null,
     })),
   }));
   renderGuide("");
@@ -331,6 +334,13 @@ function buildGuideDetail(panel, item) {
   how.className = "hand-how";
   how.textContent = item.shape || item.text;
   body.append(how);
+
+  if (item.reason) {
+    const why = document.createElement("p");
+    why.className = "hand-why";
+    why.textContent = item.reason;
+    body.append(why);
+  }
 
   const steps = document.createElement("ol");
   steps.className = "hand-steps";

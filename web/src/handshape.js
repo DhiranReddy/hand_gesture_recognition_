@@ -63,6 +63,19 @@ export const SHAPES = {
   7: { f: "eece", t: "pinch-ring" },
   8: { f: "ecee", t: "pinch-middle" },
   9: { f: "ceee", t: "pinch-index" },
+
+  // --- words and phrases
+  YES: { f: "cccc", t: "up-strong" },
+  NO: { f: "cccc", t: "down-strong" },
+  LOVE: { f: "ecce", t: "out" },
+  HELP: { f: "ecce", t: "tucked" },
+  OK: { f: "ceee", t: "pinch-index" },
+  HELLO: { f: "eeee", t: "out", s: true },
+  PLEASE: { f: "eeee", t: "out" },
+  YOU: { f: "eccc", t: "tucked", o: "right" },
+  THANK_YOU: { f: "eeee", t: "tucked", o: "right" },
+  WATER: { f: "eeec", t: "out" },
+  FOOD: { f: "bbbb", t: "out", special: "ring" },
 };
 
 /**
@@ -112,6 +125,10 @@ const THUMB = {
   across: { x: 34, y: 96, len: 30, angle: 68, w: 11 },
   tucked: { x: 34, y: 96, len: 18, angle: 40, w: 11 },
   between: { x: 46, y: 80, len: 20, angle: 8, w: 10 },
+  // Thumb straight up / straight down carry the whole meaning of yes and no,
+  // so they get their own poses rather than reusing "out".
+  "up-strong": { x: 30, y: 78, len: 40, angle: -4, w: 13 },
+  "down-strong": { x: 30, y: 44, len: 40, angle: 176, w: 13 },
 };
 
 function node(name, attrs = {}) {

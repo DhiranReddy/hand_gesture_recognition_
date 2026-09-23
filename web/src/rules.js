@@ -23,7 +23,7 @@ import {
   pointingHorizontal,
   thumbBetweenIndexMiddle,
   WRIST,
-} from "./geometry.js?v=12";
+} from "./geometry.js?v=13";
 
 /** @returns {string|null} A-Z */
 export function classifyLetter(lm, handedness) {
@@ -189,44 +189,28 @@ export function classifyNumber(lm, handedness) {
 }
 
 /**
- * Phrase gestures, limited to the labels the shipped model also knows so the
- * two recognisers share a vocabulary. The Python table has ~60 entries, several
- * of which are unreachable duplicates; porting those would import the bugs.
+ * Phrase gestures.
+ *
+ * Chosen to be guessable rather than inherited: a thumb up means yes, a thumb
+ * down means no, a raised palm is a wave. Where a sign is already universal
+ * (thumbs up, OK, I-love-you) it is used as-is; the rest pair an iconic shape
+ * with the meaning, so the guide can explain each one in a single line.
+ *
+ * Only three shapes are genuinely unclaimed — thumb up, thumb down and
+ * I-love-you — and those read correctly in any mode. The rest overlap a letter
+ * or digit and win only because phrases are matched first: horns also satisfies
+ * the (very loose) rule for C, the OK ring matches F and 9, an open palm
+ * matches 5. That is the trade the mode switch exists for — use Letters mode
+ * when fingerspelling.
  */
 export function classifyPhrase(lm, handedness) {
   const s = fingerStates(lm, handedness);
   const [thumb, index, middle, ring, pinky] = s;
   const ext = countExtended(s);
   const palm = palmSize(lm);
+  const curled = (f) => f !== "extended";
 
-  if (
-    thumb === "extended" && index === "extended" && pinky === "extended" &&
-    middle === "curled" && ring === "curled"
-  ) return "LOVE";
-
-  if (thumb === "extended" && ext === 0) {
-    return lm[THUMB_TIP].y < lm[WRIST].y ? "YES" : "NO";
-  }
-
-  if (
-    fingertipsPinch(lm, THUMB_TIP, INDEX_TIP) &&
-    middle === "extended" && ring === "extended" && pinky === "extended"
-  ) return "OK";
-
-  if (ext === 0 && thumb !== "extended") return "PLEASE";
-
-  if (
-    thumb === "extended" && index === "extended" && middle === "extended" &&
-    ring === "curled" && pinky === "curled"
-  ) return "HELP";
-
-  if (index === "extended" && ext === 1 && thumb !== "extended") return "YOU";
-
-  if (
-    thumb === "extended" && index === "extended" &&
-    middle === "extended" && ring === "extended" && pinky === "curled"
-  ) return "WATER";
-
+  // --- gathered fingertips: pinching food toward the mouth
   const tips = [INDEX_TIP, MIDDLE_TIP, RING_TIP, PINKY_TIP];
   let cx = 0;
   let cy = 0;
@@ -235,17 +219,60 @@ export function classifyPhrase(lm, handedness) {
     cy += lm[t].y;
   }
   const centre = { x: cx / tips.length, y: cy / tips.length };
+  const gathered = tips.every(
+    (t) => Math.hypot(lm[t].x - centre.x, lm[t].y - centre.y) < palm * 0.5,
+  );
+  if (gathered && thumb === "curled" && ext === 0) return "FOOD";
+
+  // --- OK ring: thumb and index meet, the other three stay up
   if (
-    thumb === "curled" &&
-    tips.every((t) => Math.hypot(lm[t].x - centre.x, lm[t].y - centre.y) < palm * 0.5)
-  ) return "FOOD";
+    fingertipsPinch(lm, THUMB_TIP, INDEX_TIP) &&
+    middle === "extended" && ring === "extended" && pinky === "extended"
+  ) return "OK";
 
-  if (s.every((f) => f === "extended")) return "HELLO";
+  // --- I-love-you: thumb, index and pinky out together
+  if (
+    thumb === "extended" && index === "extended" && pinky === "extended" &&
+    curled(middle) && curled(ring)
+  ) return "LOVE";
 
+  // --- horns: the same two fingers without the thumb, so the pair never
+  //     collides with I-love-you
+  if (
+    index === "extended" && pinky === "extended" &&
+    thumb !== "extended" && curled(middle) && curled(ring)
+  ) return "HELP";
+
+  // --- thumb alone: up means yes, down means no
+  if (thumb === "extended" && ext === 0) {
+    return lm[THUMB_TIP].y < lm[WRIST].y ? "YES" : "NO";
+  }
+
+  // --- W with the thumb out, so it reads as water rather than the letter
+  if (
+    thumb === "extended" &&
+    index === "extended" && middle === "extended" && ring === "extended" &&
+    pinky !== "extended"
+  ) return "WATER";
+
+  // --- pointing sideways, at the person you are talking to
+  if (
+    index === "extended" && ext === 1 &&
+    curled(middle) && curled(ring) && curled(pinky) &&
+    pointingHorizontal(lm)
+  ) return "YOU";
+
+  // --- a flat hand moving out from the chin
   if (
     index === "extended" && middle === "extended" &&
-    ring === "extended" && pinky === "extended" && thumb !== "extended"
+    ring === "extended" && pinky === "extended" &&
+    indexMiddleTogether(lm) && pointingHorizontal(lm)
   ) return "THANK_YOU";
+
+  // --- an open hand held up: spread waves hello, together asks please
+  if (s.every((f) => f === "extended")) {
+    return indexMiddleSpread(lm) ? "HELLO" : "PLEASE";
+  }
 
   return null;
 }
@@ -254,8 +281,15 @@ export const MODE_ALL = "all";
 export const MODE_WORDS = "words";
 export const MODE_LETTERS = "letters";
 
-/** Phrases distinctive enough to outrank a letter in mixed mode. */
-const UNIQUE_PHRASES = new Set(["LOVE", "OK", "HELP", "FOOD", "WATER"]);
+/**
+ * Phrases that outrank a letter in mixed mode. All of them, because a phrase
+ * is the likelier intent in conversation, and Letters mode is one keystroke
+ * away when fingerspelling.
+ */
+const UNIQUE_PHRASES = new Set([
+  "YES", "NO", "LOVE", "HELP", "OK", "HELLO",
+  "PLEASE", "YOU", "THANK_YOU", "WATER", "FOOD",
+]);
 
 /**
  * Combined rule verdict, mirroring classify_gesture() in gesture_classifier.py.

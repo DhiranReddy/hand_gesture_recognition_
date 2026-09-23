@@ -14,7 +14,7 @@
  * exactly as the Python pipeline does with its pixel-space tuples.
  */
 
-import { landmarksToFeatures } from "./features.js?v=12";
+import { landmarksToFeatures } from "./features.js?v=13";
 
 const STORAGE_KEY = "signal.calibration.v2";
 const LEGACY_KEYS = ["signal.calibration.v1"];

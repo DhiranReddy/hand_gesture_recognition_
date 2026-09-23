@@ -408,6 +408,31 @@ training data.
 > That is fine for local experiments, but confirm terms before deploying a model
 > trained on it publicly. Use `--dataset` to point at a source you have cleared.
 
+### Word and phrase gestures
+
+Phrases use shapes chosen to be guessable rather than inherited:
+
+| Gesture | Means | Why |
+|---|---|---|
+| 👍 Thumb up | Yes | universal |
+| 👎 Thumb down | No | the same hand, inverted |
+| 🤟 Thumb + index + pinky | I love you | the ASL sign |
+| 🤘 Index + pinky, thumb in | Help | horns; the thumb is what separates it from *I love you* |
+| 👌 Thumb–index ring | OK | universal |
+| 🖐 Open hand, spread | Hello | a wave |
+| 🤚 Open hand, together | Please | held out flat |
+| 👉 Index sideways | You | pointing at the person |
+| Flat hand sideways | Thank you | the ASL sign, leaving the chin |
+| Three fingers + thumb | Water | a W, with the thumb out so it isn't the letter |
+| Gathered fingertips | Food | lifting food to your mouth |
+
+Only **thumb up, thumb down and I-love-you** use shapes no letter or digit
+wants, so those read in any mode. The rest overlap a letter — horns also
+satisfies the loose rule for `C`, an open palm is also `5` — and win because
+phrases are matched first. Switch to **Letters** mode when fingerspelling.
+
+Each one has a diagram and a one-line rationale in the in-app guide.
+
 ### Recording your own data
 
 The browser's *Teach your hand* panel is also a data collector. **Export

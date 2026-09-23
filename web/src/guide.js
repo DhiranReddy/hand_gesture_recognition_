@@ -51,36 +51,42 @@ export const HAND_SHAPES = {
  * the model's original training set is missing.
  */
 export const PHRASE_SHAPES = {
-  HELLO: "Open palm, all five fingers extended",
-  HI: "Fingers bent in a small wave, pinky out",
-  GOODBYE: "Thumb, index and middle out; ring and pinky folded",
-  THANK_YOU: "Flat hand, four fingers up, thumb tucked in",
-  PLEASE: "Closed fist with the thumb held flat against the fingers",
-  SORRY: "Fist with the index and thumb bent inward",
-  YES: "Fist with the thumb pointing up",
-  NO: "Fist with the thumb pointing down",
-  OK: "Thumb and index pinched into a ring, other three fingers up",
-  LOVE: "Thumb, index and pinky extended; middle and ring folded",
-  HELP: "Thumb, index and middle extended; ring and pinky folded",
-  YOU: "Index finger pointing forward, thumb closed",
-  ME: "Four fingers together pointing in, thumb folded",
-  WATER: "Four fingers extended with the pinky folded in",
-  FOOD: "Fingertips gathered together, thumb tucked",
-  BATHROOM: "Closed fist with the thumb bent forward",
-  EMERGENCY: "Four fingers up and spread apart",
-  GOOD: "Fist with the thumb up",
-  BAD: "Fist with the thumb down",
-  HUNGRY: "Fingers curved into a C against the body",
-  QUESTION: "Index finger hooked, thumb out",
-  ONE_MOMENT: "Index finger raised, thumb closed",
-  CAN_YOU_HEAR: "Three fingers up, pinky folded, thumb bent",
+  YES: "Thumb up, fingers closed — a thumbs-up",
+  NO: "Thumb down, fingers closed — a thumbs-down",
+  HELLO: "Open hand held up, fingers spread — a wave",
+  PLEASE: "Open hand held up with the fingers together",
+  THANK_YOU: "Flat hand, fingers together, moving out from the chin",
+  HELP: "Index and pinky out, thumb closed — horns",
+  LOVE: "Thumb, index and pinky out together — I-love-you",
+  OK: "Thumb and index in a ring, other three fingers up",
+  YOU: "Index finger pointing sideways, at the person you mean",
+  WATER: "Three fingers up with the thumb out — a W for water",
+  FOOD: "Fingertips gathered to a point, as if lifting food",
 };
+
+/** Why each phrase gesture is the shape it is, shown in the guide. */
+export const PHRASE_REASONS = {
+  YES: "The universal thumbs-up. No letter or digit uses it, so it reads in any mode.",
+  NO: "The same hand rotated down — the opposite sign for the opposite word, and equally unambiguous.",
+  HELLO: "An open hand mid-wave. Fingers spread is hello; together is please.",
+  PLEASE: "An open hand held flat and still, the way you hold it out to ask.",
+  THANK_YOU: "The ASL sign: a flat hand leaving the chin, so it points sideways.",
+  HELP: "Horns — two fingers up like a distress signal. Shares a shape with C, so use Words mode if C keeps winning.",
+  LOVE: "The I-L-Y sign: I, L and Y in one hand. The thumb is what separates it from Help, and nothing else claims it.",
+  OK: "The universal OK ring. It shares a shape with F and 9, so it wins only outside Letters mode.",
+  YOU: "Pointing at the person. Sideways, so it is not confused with the number one.",
+  WATER: "A W for water, with the thumb out so it is not the letter W.",
+  FOOD: "Fingertips pinched as if lifting food to your mouth.",
+};
+
 
 /** Letters whose true ASL form requires movement the static model cannot see. */
 export const MOTION_LETTERS = new Set(["J", "Z"]);
 
-/** Shapes that differ by only one finger, so they are easy to confuse. */
-export const CONFUSABLE = new Set(["HELLO", "THANK_YOU", "WATER", "EMERGENCY"]);
+/** Phrase shapes a letter or digit also wants; these need Words or Letters mode. */
+export const CONFUSABLE = new Set([
+  "HELLO", "PLEASE", "YOU", "THANK_YOU", "WATER",
+]);
 
 export function shapeFor(label) {
   return HAND_SHAPES[label] || PHRASE_SHAPES[label] || null;
