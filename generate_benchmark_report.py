@@ -9,13 +9,13 @@ import json
 from pathlib import Path
 import sys
 
-import joblib
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from sklearn.model_selection import train_test_split
 
 from src.custom_dataset import DatasetError, load_dataset
+from src.model_io import ModelError, dataset_fingerprint, load_model
 from src.profile_paths import (
     DEFAULT_PROFILE,
     dataset_path_for_profile,
@@ -77,14 +77,13 @@ def main() -> int:
         print(f"Dataset load failed: {exc}")
         return 1
 
-    data = joblib.load(model_path)
-    model = data.get("model")
-    encoder = data.get("encoder")
-    if model is None or encoder is None:
-        print(f"Model bundle at {model_path} is invalid.")
+    try:
+        model, model_meta = load_model(model_path)
+    except ModelError as exc:
+        print(exc)
         return 1
 
-    known = set(str(label) for label in encoder.classes_)
+    known = set(str(label) for label in model.classes_)
     keep_mask = np.array([label in known for label in y], dtype=bool)
     X = X[keep_mask]
     y = y[keep_mask]
@@ -92,37 +91,59 @@ def main() -> int:
         print("Not enough known-label samples to benchmark this model.")
         return 1
 
-    y_enc = encoder.transform(y)
-    stratify = y_enc if len(np.unique(y_enc)) > 1 else None
-    X_train, X_test, y_train, y_test = train_test_split(
-        X,
-        y_enc,
-        test_size=args.test_size,
-        random_state=args.random_state,
-        stratify=stratify,
-    )
-    _ = X_train, y_train
+    classes = list(model.classes_)
+    index_of = {label: i for i, label in enumerate(classes)}
+    y_enc = np.array([index_of[str(label)] for label in y])
 
-    y_pred = model.predict(X_test)
+    # Prefer the split the model was actually trained with. Recomputing it from
+    # a seed silently evaluates on training rows once the dataset grows.
+    split = model_meta.get("split") or {}
+    fingerprint = dataset_fingerprint(y)
+    if split.get("test_indices") and split.get("dataset_fingerprint") == fingerprint:
+        test_idx = np.array(split["test_indices"], dtype=int)
+        split_source = "persisted split from training"
+    else:
+        if split.get("test_indices"):
+            print(
+                "WARNING: the dataset has changed since this model was trained "
+                "(fingerprint mismatch), so the original evaluation rows no "
+                "longer exist. Falling back to a fresh split — some of it will "
+                "be data the model trained on, and accuracy will be optimistic."
+            )
+        else:
+            print("WARNING: model has no persisted split; falling back to a seeded one.")
+        stratify = y_enc if len(np.unique(y_enc)) > 1 else None
+        _, test_idx = train_test_split(
+            np.arange(len(y_enc)),
+            test_size=args.test_size,
+            random_state=args.random_state,
+            stratify=stratify,
+        )
+        split_source = "reseeded split (may overlap training data)"
+
+    X_test, y_test = X[test_idx], y_enc[test_idx]
+    print(f"Evaluating on {len(y_test)} samples — {split_source}.")
+
+    y_pred = np.array([index_of[str(label)] for label in model.predict(X_test)])
     accuracy = float(accuracy_score(y_test, y_pred))
 
     report = classification_report(
         y_test,
         y_pred,
-        labels=np.arange(len(encoder.classes_)),
-        target_names=list(encoder.classes_),
+        labels=np.arange(len(classes)),
+        target_names=classes,
         zero_division=0,
         output_dict=True,
     )
 
-    cm = confusion_matrix(y_test, y_pred, labels=np.arange(len(encoder.classes_)))
+    cm = confusion_matrix(y_test, y_pred, labels=np.arange(len(classes)))
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     cm_path = reports_dir / f"confusion_matrix_{timestamp}.png"
     report_path = reports_dir / f"benchmark_{timestamp}.md"
     history_path = reports_dir / "benchmark_history.jsonl"
 
-    _save_confusion_matrix(cm_path, cm, list(encoder.classes_))
+    _save_confusion_matrix(cm_path, cm, classes)
 
     summary = {
         "timestamp": timestamp,
@@ -169,7 +190,7 @@ def main() -> int:
         handle.write("## Per-label Metrics\n\n")
         handle.write("| Label | Precision | Recall | F1 | Support |\n")
         handle.write("|---|---:|---:|---:|---:|\n")
-        for label in encoder.classes_:
+        for label in classes:
             stats = report.get(label, {})
             handle.write(
                 f"| {label} | {stats.get('precision', 0.0):.3f} | {stats.get('recall', 0.0):.3f} | "

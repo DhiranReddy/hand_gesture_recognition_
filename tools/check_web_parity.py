@@ -19,13 +19,13 @@ import sys
 import tempfile
 from pathlib import Path
 
-import joblib
 import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from src.landmark_features import landmarks_to_features  # noqa: E402
+from src.model_io import load_model  # noqa: E402
 from src.ml_gesture_model import MLGestureClassifier  # noqa: E402
 
 WEB = ROOT / "web"
@@ -96,8 +96,7 @@ def main() -> int:
     rng = np.random.default_rng(7)
     cases = build_cases(rng)
 
-    bundle = joblib.load(ROOT / "models" / "gesture_mlp.joblib")
-    clf, encoder = bundle["model"], bundle["encoder"]
+    clf, _ = load_model(ROOT / "models" / "gesture_mlp.json")
 
     py_features = []
     py_labels: list[str | None] = []
@@ -115,7 +114,7 @@ def main() -> int:
             conf >= MLGestureClassifier.MIN_CONFIDENCE
             and margin >= MLGestureClassifier.MIN_MARGIN
         )
-        py_labels.append(str(encoder.classes_[idx]) if gated else None)
+        py_labels.append(str(clf.classes_[idx]) if gated else None)
         py_conf.append(conf)
 
     with tempfile.TemporaryDirectory() as tmpdir:

@@ -353,6 +353,7 @@ public dataset rather than recording thousands of samples by hand:
 python tools/fetch_dataset.py      # download images, extract landmarks (~5 min)
 python train_gesture_model.py --min-samples-per-label 20 --show-report
 python tools/diagnose_model.py     # is the result actually usable?
+python generate_benchmark_report.py  # confusion matrix on the persisted split
 python tools/export_web_assets.py  # publish it to the web app
 python tools/check_web_parity.py   # JS inference still matches Python
 ```
@@ -362,8 +363,46 @@ MediaPipe over every image, and writes `data/gesture_landmarks.jsonl` — the sa
 format `capture_gesture_dataset.py` produces. MediaPipe finds a hand in about
 77% of the images, giving ~8,400 samples across A–Z (250–355 per letter).
 
-The current model trains to **90.0% accuracy** on a held-out 20% split
-(1,683 samples). Weakest letters are Q (f1 0.76), R (0.77) and U (0.78).
+The current model reaches **96.6% on its held-out split** (1,683 samples) and
+**91.2% ± 1.5% under 5-fold cross-validation**. Quote the cross-validated number:
+a single split flatters whichever model happens to suit it.
+
+Training records the baselines it was measured against, and refuses to let a
+weak model pass unnoticed:
+
+| model | held-out accuracy |
+|---|---:|
+| **this MLP** | **96.6%** |
+| SVC (rbf) | 94.8% |
+| RandomForest | 93.8% |
+| k-NN (k=1) | 92.3% |
+
+Two defaults are deliberate and were measured, not guessed:
+
+- **Feature-space augmentation is off.** Adding gaussian noise to already
+  normalised features cost 3.2 points. Re-enable with `--augment-noise-std`.
+- **Inputs are standardised and training runs to convergence.** The original
+  configuration had no scaler and used `early_stopping` on a second split
+  carved out of the training set; together those cost ~6 points.
+
+### Models are JSON, not pickle
+
+`joblib` serialises with pickle, which **executes arbitrary code on load** — a
+real risk given this project encourages sharing profile and calibration files.
+Models are stored as plain JSON (weights, standardiser, labels, metadata) and
+loaded by a small numpy forward pass in `src/model_io.py`, which is also the
+reference for the maths `web/src/classifier.js` implements.
+
+Convert an old model with `python tools/migrate_model.py path/to/model.joblib`;
+it prompts, because loading the pickle is itself the unsafe step.
+
+### The evaluation split is persisted
+
+The rows used for evaluation are stored in the model file alongside a
+fingerprint of the dataset. `generate_benchmark_report.py` reuses exactly those
+rows, and warns loudly if the dataset has changed since training — otherwise
+appending samples silently reshuffles the split and scores the model on its own
+training data.
 
 > **Licensing:** the default dataset declares no license on its dataset card.
 > That is fine for local experiments, but confirm terms before deploying a model

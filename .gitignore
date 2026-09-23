@@ -16,3 +16,6 @@ tests/__pycache__/
 
 # Regenerate with tools/fetch_dataset.py rather than committing 11MB
 data/gesture_landmarks.jsonl
+
+# Legacy pickle models — use tools/migrate_model.py, then delete
+*.joblib

@@ -16,13 +16,13 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-import joblib
 import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from src.landmark_features import landmarks_to_features  # noqa: E402
+from src.model_io import ModelError, load_model  # noqa: E402
 from src.profile_paths import model_path_for_profile  # noqa: E402
 from tests.conftest import OPEN_PALM  # noqa: E402
 
@@ -45,8 +45,12 @@ def main() -> int:
         print(f"No model at {path}.")
         return 1
 
-    bundle = joblib.load(path)
-    clf, encoder = bundle["model"], bundle["encoder"]
+    try:
+        clf, metadata = load_model(path)
+    except ModelError as exc:
+        print(exc)
+        return 1
+    encoder = clf
     rng = np.random.default_rng(0)
 
     base = np.array(OPEN_PALM, dtype=float)
@@ -65,7 +69,6 @@ def main() -> int:
     ordered = np.sort(probs, axis=1)
     never = [c for c in encoder.classes_ if c not in counts]
 
-    metadata = bundle.get("metadata") or {}
     accuracy = metadata.get("test_accuracy")
 
     print(f"model                  : {path}")

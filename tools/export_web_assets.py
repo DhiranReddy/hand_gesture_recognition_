@@ -17,7 +17,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-import joblib
 import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -40,37 +39,35 @@ PRIORITY_WORDS = (
 
 
 def export_model(model_path: Path, out_path: Path) -> dict[str, Any]:
-    """Flatten a joblib MLPClassifier bundle into plain JSON arrays."""
-    bundle = joblib.load(model_path)
-    clf = bundle["model"]
-    encoder = bundle["encoder"]
-
-    if clf.activation != "relu" or clf.out_activation_ != "softmax":
-        raise SystemExit(
-            f"Web runtime implements relu/softmax only, got "
-            f"{clf.activation}/{clf.out_activation_}."
-        )
-
-    # Display names come from the Python phrase table so the web app says
-    # "I don't understand" rather than title-casing the raw id.
+    """Republish the trained model for the browser, adding display names."""
     from src.gesture_classifier import ALL_LABELS
+    from src.model_io import load_model
 
-    labels = [str(c) for c in encoder.classes_]
+    model, metadata = load_model(model_path)
+
     payload = {
-        "format": "dense-mlp-v1",
-        "n_features": int(clf.n_features_in_),
-        "labels": labels,
+        "format": "dense-mlp-v2",
+        "n_features": int(model.n_features_in_),
+        "labels": [str(c) for c in model.classes_],
         # Whole table, not just this model's labels, so a retrained model
         # with more phrases renders correctly without re-exporting.
         "display_names": dict(ALL_LABELS),
+        "standardizer": (
+            None
+            if model.mean is None
+            else {
+                "mean": np.asarray(model.mean, dtype=np.float64).round(8).tolist(),
+                "scale": np.asarray(model.scale, dtype=np.float64).round(8).tolist(),
+            }
+        ),
         "layers": [
             {
-                "weights": np.asarray(w, dtype=np.float32).round(6).tolist(),
-                "bias": np.asarray(b, dtype=np.float32).round(6).tolist(),
+                "weights": np.asarray(w, dtype=np.float64).round(8).tolist(),
+                "bias": np.asarray(b, dtype=np.float64).round(8).tolist(),
             }
-            for w, b in zip(clf.coefs_, clf.intercepts_)
+            for w, b in model.layers
         ],
-        "source_metadata": bundle.get("metadata", {}),
+        "source_metadata": metadata,
     }
 
     out_path.parent.mkdir(parents=True, exist_ok=True)

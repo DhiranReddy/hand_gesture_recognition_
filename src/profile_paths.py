@@ -8,7 +8,7 @@ ROOT_PATH = Path(__file__).resolve().parent.parent
 PROFILES_ROOT = ROOT_PATH / "profiles"
 
 DEFAULT_PROFILE = "default"
-LEGACY_MODEL_PATH = ROOT_PATH / "models" / "gesture_mlp.joblib"
+LEGACY_MODEL_PATH = ROOT_PATH / "models" / "gesture_mlp.json"
 LEGACY_DATASET_PATH = ROOT_PATH / "data" / "gesture_landmarks.jsonl"
 
 
@@ -25,7 +25,7 @@ def profile_dir(profile: str) -> Path:
 def model_path_for_profile(profile: str) -> Path:
     if _sanitize_profile_name(profile) == DEFAULT_PROFILE:
         return LEGACY_MODEL_PATH
-    return profile_dir(profile) / "gesture_mlp.joblib"
+    return profile_dir(profile) / "gesture_mlp.json"
 
 
 def dataset_path_for_profile(profile: str) -> Path:

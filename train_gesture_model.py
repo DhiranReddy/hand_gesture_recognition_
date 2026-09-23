@@ -64,8 +64,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--augment-noise-std",
         type=float,
-        default=0.08,
-        help="Feature-space Gaussian noise std used for synthetic augmented samples",
+        default=0.0,
+        help="Feature-space Gaussian noise std for synthetic samples. "
+             "Off by default: it measurably lowered accuracy (-3.2 points)",
     )
     parser.add_argument(
         "--quality-check",
@@ -137,7 +138,7 @@ def main() -> None:
     print(f"Labels: {len(metadata.get('label_counts', {}))}")
     print(
         "Balanced train samples: "
-        f"{metadata.get('train_samples_before_balance', 0)}"
+        f"{metadata.get('train_samples', 0)}"
         f" -> {metadata.get('train_samples_after_balance', 0)}"
     )
     print(f"Augmented samples created: {metadata.get('augmented_samples_created', 0)}")

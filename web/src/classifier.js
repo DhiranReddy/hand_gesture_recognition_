@@ -7,7 +7,7 @@
  * disagreeing recognizers in the browser buys inconsistency, not accuracy.
  */
 
-import { landmarksToFeatures, FEATURE_LENGTH } from "./features.js?v=10";
+import { landmarksToFeatures, FEATURE_LENGTH } from "./features.js?v=11";
 
 const MIN_CONFIDENCE = 0.56;
 const MIN_MARGIN = 0.1;
@@ -42,7 +42,7 @@ function softmax(v) {
 /** Column-major-free dense layer: out[j] = sum_i(in[i] * W[i][j]) + b[j]. */
 function dense(input, layer) {
   const { weights, bias } = layer;
-  const out = new Float32Array(bias.length);
+  const out = new Float64Array(bias.length);
   out.set(bias);
   for (let i = 0; i < input.length; i += 1) {
     const x = input[i];
@@ -57,7 +57,7 @@ function dense(input, layer) {
 
 export class GestureClassifier {
   constructor(spec) {
-    if (spec.format !== "dense-mlp-v1") {
+    if (spec.format !== "dense-mlp-v2") {
       throw new Error(`Unsupported model format: ${spec.format}`);
     }
     if (spec.n_features !== FEATURE_LENGTH) {
@@ -67,6 +67,10 @@ export class GestureClassifier {
     }
     this.labels = spec.labels;
     this.layers = spec.layers;
+    // Inputs are standardised before the first layer when the trainer fitted a
+    // StandardScaler. Skipping this would silently wreck every prediction.
+    this.mean = spec.standardizer ? Float64Array.from(spec.standardizer.mean) : null;
+    this.scale = spec.standardizer ? Float64Array.from(spec.standardizer.scale) : null;
     this.metadata = spec.source_metadata || {};
     this.history = [];
     // Registering the exported phrase table keeps display text identical to the
@@ -107,6 +111,13 @@ export class GestureClassifier {
   /** Raw single-frame prediction with no smoothing. */
   predict(landmarks, handedness, width, height) {
     let activations = landmarksToFeatures(landmarks, handedness, width, height);
+    if (this.mean) {
+      const standardised = new Float64Array(activations.length);
+      for (let i = 0; i < activations.length; i += 1) {
+        standardised[i] = (activations[i] - this.mean[i]) / this.scale[i];
+      }
+      activations = standardised;
+    }
     for (let i = 0; i < this.layers.length; i += 1) {
       activations = dense(activations, this.layers[i]);
       if (i < this.layers.length - 1) relu(activations);

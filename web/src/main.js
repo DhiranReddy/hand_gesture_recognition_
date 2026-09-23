@@ -18,13 +18,13 @@ import {
   MODE_ALL,
   MODE_WORDS,
   MODE_LETTERS,
-} from "./classifier.js?v=10";
-import { SpellCorrector, WordProcessor } from "./words.js?v=10";
-import { Speaker } from "./speech.js?v=10";
-import { groupLabels, shapeFor, MOTION_LETTERS, CONFUSABLE, VOCABULARY } from "./guide.js?v=10";
-import { renderHand, hasDiagram, COLLISIONS } from "./handshape.js?v=10";
-import { Calibration, MIN_SAMPLES } from "./calibration.js?v=10";
-import { Recognizer } from "./recognizer.js?v=10";
+} from "./classifier.js?v=11";
+import { SpellCorrector, WordProcessor } from "./words.js?v=11";
+import { Speaker } from "./speech.js?v=11";
+import { groupLabels, shapeFor, MOTION_LETTERS, CONFUSABLE, VOCABULARY } from "./guide.js?v=11";
+import { renderHand, hasDiagram, COLLISIONS } from "./handshape.js?v=11";
+import { Calibration, MIN_SAMPLES } from "./calibration.js?v=11";
+import { Recognizer } from "./recognizer.js?v=11";
 
 const WASM_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm";
 const LANDMARKER_TASK =
@@ -39,6 +39,8 @@ const HAND_CONNECTIONS = [
   [0, 17],
 ];
 
+/** Bump when the exported model changes, so browsers refetch it. */
+const ASSET_VERSION = "2";
 const CHANNEL = "signal-captions";
 const HOLD_CIRCUMFERENCE = 128.8;
 const STORAGE_KEY = "signal.settings.v1";
@@ -159,8 +161,8 @@ async function loadAssets() {
   setStatus(dom.statusModel, "loading…");
   const [vision, classifier, corrector] = await Promise.all([
     FilesetResolver.forVisionTasks(WASM_BASE),
-    GestureClassifier.load("./public/model/gesture_mlp.json"),
-    SpellCorrector.load("./public/model/words.json"),
+    GestureClassifier.load(`./public/model/gesture_mlp.json?v=${ASSET_VERSION}`),
+    SpellCorrector.load(`./public/model/words.json?v=${ASSET_VERSION}`),
   ]);
 
   state.landmarker = await HandLandmarker.createFromOptions(vision, {
