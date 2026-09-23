@@ -23,7 +23,7 @@ that produces the model it runs.
 - **Session log** with timestamps, copy, and download
 - **Undo** (⌘Z) on every edit, plus adjustable hold and pause timing
 - **Gesture guide** with searchable hand-shape descriptions, flagged for motion letters and look-alike shapes
-- Light/dark themes, camera picker, and settings that persist across reloads
+- Camera picker and settings that persist across reloads
 
 ### Run the web app locally
 

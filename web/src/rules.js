@@ -23,7 +23,7 @@ import {
   pointingHorizontal,
   thumbBetweenIndexMiddle,
   WRIST,
-} from "./geometry.js?v=9";
+} from "./geometry.js?v=10";
 
 /** @returns {string|null} A-Z */
 export function classifyLetter(lm, handedness) {

@@ -1,7 +1,8 @@
 /* =============================================================
    Signal — warm paper palette
-   Beige ground, clay accent, serif display. Light is the primary
-   theme; dark is a warm low-light version rather than a cold one.
+   Beige ground, clay accent, serif display. Light only: the app is
+   read at a glance during a call, and one consistent surface keeps
+   the captions legible wherever it is shared.
    ============================================================= */
 
 :root {
@@ -35,53 +36,6 @@
   color-scheme: light;
 }
 
-:root[data-theme="dark"] {
-  --paper: #15110c;
-  --paper-edge: #1b160f;
-  --card: #1e1811;
-  --sand: #271f17;
-  --sand-deep: #2f261c;
-  --line: #3a3024;
-  --line-soft: #2c2419;
-  --ink: #f4ecdf;
-  --ink-mid: #cdbfa9;
-  --ink-soft: #9b8c76;
-  --clay: #d9a06a;
-  --clay-deep: #e8b686;
-  --clay-wash: #2a2016;
-  --danger: #dd8177;
-
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.32), 0 12px 28px rgba(0, 0, 0, 0.28);
-  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.36), 0 28px 60px rgba(0, 0, 0, 0.42);
-
-  color-scheme: dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --paper: #15110c;
-    --paper-edge: #1b160f;
-    --card: #1e1811;
-    --sand: #271f17;
-    --sand-deep: #2f261c;
-    --line: #3a3024;
-    --line-soft: #2c2419;
-    --ink: #f4ecdf;
-    --ink-mid: #cdbfa9;
-    --ink-soft: #9b8c76;
-    --clay: #d9a06a;
-    --clay-deep: #e8b686;
-    --clay-wash: #2a2016;
-    --danger: #dd8177;
-
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.32), 0 12px 28px rgba(0, 0, 0, 0.28);
-    --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.36), 0 28px 60px rgba(0, 0, 0, 0.42);
-
-    color-scheme: dark;
-  }
-}
 
 *,
 *::before,

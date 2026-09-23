@@ -18,13 +18,13 @@ import {
   MODE_ALL,
   MODE_WORDS,
   MODE_LETTERS,
-} from "./classifier.js?v=9";
-import { SpellCorrector, WordProcessor } from "./words.js?v=9";
-import { Speaker } from "./speech.js?v=9";
-import { groupLabels, shapeFor, MOTION_LETTERS, CONFUSABLE, VOCABULARY } from "./guide.js?v=9";
-import { renderHand, hasDiagram, COLLISIONS } from "./handshape.js?v=9";
-import { Calibration, MIN_SAMPLES } from "./calibration.js?v=9";
-import { Recognizer } from "./recognizer.js?v=9";
+} from "./classifier.js?v=10";
+import { SpellCorrector, WordProcessor } from "./words.js?v=10";
+import { Speaker } from "./speech.js?v=10";
+import { groupLabels, shapeFor, MOTION_LETTERS, CONFUSABLE, VOCABULARY } from "./guide.js?v=10";
+import { renderHand, hasDiagram, COLLISIONS } from "./handshape.js?v=10";
+import { Calibration, MIN_SAMPLES } from "./calibration.js?v=10";
+import { Recognizer } from "./recognizer.js?v=10";
 
 const WASM_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm";
 const LANDMARKER_TASK =
@@ -74,14 +74,13 @@ const dom = Object.fromEntries(
     "calib-select", "calib-record", "calib-forget", "calib-status", "calib-meter",
     "calib-progress", "calib-hint", "calib-summary",
     "calib-export", "calib-import", "calib-file",
-    "theme-btn", "toast",
+    "toast",
   ].map((id) => [id.replace(/-([a-z])/g, (_, c) => c.toUpperCase()), el(id)]),
 );
 
 /* ------------------------------------------------------------- settings */
 
 const defaults = {
-  theme: null,
   mode: MODE_ALL,
   holdMs: 330,
   pauseMs: 730,
@@ -152,12 +151,6 @@ function toast(message) {
 function setStatus(node, text, kind = "") {
   node.textContent = text;
   node.className = kind;
-}
-
-function applyTheme() {
-  const root = document.documentElement;
-  if (settings.theme) root.dataset.theme = settings.theme;
-  else delete root.dataset.theme;
 }
 
 /* ----------------------------------------------------------- load model */
@@ -791,7 +784,6 @@ function populateVoices(voices) {
 }
 
 function applySettingsToUI() {
-  applyTheme();
   setMode(settings.mode);
 
   dom.holdRange.value = settings.holdMs;
@@ -953,14 +945,6 @@ function wire() {
     settings.cameraId = e.target.value;
     saveSettings();
     startCamera();
-  });
-
-  dom.themeBtn.addEventListener("click", () => {
-    const dark = matchMedia("(prefers-color-scheme: dark)").matches;
-    const current = settings.theme || (dark ? "dark" : "light");
-    settings.theme = current === "dark" ? "light" : "dark";
-    applyTheme();
-    saveSettings();
   });
 
   dom.modelToggle.addEventListener("change", (e) => {

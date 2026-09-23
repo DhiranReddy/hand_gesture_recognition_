@@ -12,13 +12,6 @@
     />
     <style>
       :root {
-        --bg: #16110b;
-        --fg: #f7efe2;
-        --dim: #9c8b74;
-        --clay: #d9a06a;
-      }
-      /* Light is offered too — some people share onto a bright slide deck. */
-      :root[data-theme="light"] {
         --bg: #faf6ef;
         --fg: #241e17;
         --dim: #857868;
@@ -72,18 +65,6 @@
         text-transform: uppercase;
         color: var(--dim);
       }
-      .bar button {
-        font: inherit;
-        letter-spacing: inherit;
-        text-transform: inherit;
-        color: inherit;
-        background: none;
-        border: 1px solid color-mix(in srgb, var(--dim) 40%, transparent);
-        border-radius: 999px;
-        padding: 4px 11px;
-        cursor: pointer;
-      }
-      .bar button:hover { color: var(--fg); border-color: var(--fg); }
       .dot {
         display: inline-block;
         width: 6px; height: 6px;
@@ -98,7 +79,6 @@
     <p id="caption" class="idle">Waiting for captions…</p>
     <div class="bar">
       <span><span class="dot"></span><span id="state">Connected</span></span>
-      <button type="button" id="theme">Invert</button>
     </div>
 
     <script type="module">
@@ -134,11 +114,6 @@
         const alive = window.opener && !window.opener.closed;
         state.textContent = alive ? "Connected" : "Disconnected";
       }, 2000);
-
-      document.getElementById("theme").addEventListener("click", () => {
-        const root = document.documentElement;
-        root.dataset.theme = root.dataset.theme === "light" ? "dark" : "light";
-      });
     </script>
   </body>
 </html>
