@@ -3,18 +3,21 @@
  *
  * Priority, highest first:
  *   1. your calibration samples — recorded from your own hand
- *   2. the geometric rules      — deterministic ASL shape tests
- *   3. the bundled MLP          — off by default, see below
+ *   2. the trained MLP          — letters only, when confident
+ *   3. the geometric rules      — everything else, and the fallback
  *
- * The bundled model is disabled unless explicitly enabled. Probed across
- * thousands of poses it answers HELP for 61% of them, never predicts 20 of its
- * 47 labels, and returns HELP at 0.94 confidence for a plain V sign. Its
- * training set is lost, so it cannot be retrained or evaluated. Treating it as a
- * live input makes recognition worse, not better.
+ * The model covers A-Z and scores 90% on a held-out split of 8411 real
+ * photographs (tools/fetch_dataset.py builds that set). Digits and phrases are
+ * not in its vocabulary at all, so the rules own those outright and also catch
+ * anything the model is unsure about.
+ *
+ * Which of the two is better on a given webcam is genuinely unknown — the
+ * model's accuracy is measured on posed photos, a different distribution from
+ * live video — so the model stays switchable rather than assumed correct.
  */
 
-import { landmarksToFeatures } from "./features.js?v=6";
-import { classifyByRules } from "./rules.js?v=6";
+import { landmarksToFeatures } from "./features.js?v=9";
+import { classifyByRules } from "./rules.js?v=9";
 
 const SMOOTH_WINDOW = 5;
 const MIN_VOTES = 3;
@@ -23,8 +26,8 @@ const MIN_VOTES = 3;
 const RULE_CONFIDENCE = 0.9;
 /** Personal samples must clear this before they override the rules. */
 const PERSONAL_MIN = 0.6;
-/** The bundled model, when enabled at all, must be near-certain. */
-const MODEL_MIN = 0.8;
+/** The model must be clearly confident before it outranks the rules. */
+const MODEL_MIN = 0.7;
 
 function categoryFor(label) {
   if (!label) return "none";
@@ -42,7 +45,7 @@ export class Recognizer {
   constructor({ classifier, calibration }) {
     this.classifier = classifier;
     this.calibration = calibration;
-    this.useModel = false;
+    this.useModel = true;
     this.mode = "all";
     this.history = [];
   }
@@ -132,18 +135,6 @@ export class Recognizer {
       }
     }
 
-    // The rules work in pixel space; everything else stays normalized.
-    const pixels = landmarks.map((p) => ({ x: p.x * width, y: p.y * height }));
-    const rule = classifyByRules(pixels, handedness, this.mode);
-    if (rule && this.#allowed(rule.label)) {
-      return {
-        label: rule.label,
-        confidence: RULE_CONFIDENCE,
-        category: rule.category,
-        source: "rules",
-      };
-    }
-
     if (this.useModel && this.classifier) {
       const guess = this.classifier.predict(landmarks, handedness, width, height);
       if (guess.label && guess.confidence >= MODEL_MIN && this.#allowed(guess.label)) {
@@ -154,6 +145,19 @@ export class Recognizer {
           source: "model",
         };
       }
+    }
+
+    // The rules work in pixel space; everything else stays normalized. They
+    // also cover digits and phrases, which are outside the model's vocabulary.
+    const pixels = landmarks.map((p) => ({ x: p.x * width, y: p.y * height }));
+    const rule = classifyByRules(pixels, handedness, this.mode);
+    if (rule && this.#allowed(rule.label)) {
+      return {
+        label: rule.label,
+        confidence: RULE_CONFIDENCE,
+        category: rule.category,
+        source: "rules",
+      };
     }
 
     return none;

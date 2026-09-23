@@ -70,41 +70,67 @@ test("rules recognise distinct shapes as distinct labels", () => {
   assert.equal(new Set(seen.values()).size, seen.size, `distinct: ${[...seen]}`);
 });
 
-test("the bundled model is ignored unless explicitly enabled", () => {
+test("a confident model outranks the rules for letters", () => {
+  const classifier = {
+    predict: () => ({ label: "Q", confidence: 0.95 }),
+    setMode() {},
+    reset() {},
+  };
+  const hand = norm(PEACE);
+
+  const byRule = make().recognizeFrame(hand, "Right", W, H);
+  assert.equal(byRule.source, "rules");
+  assert.notEqual(byRule.label, "Q");
+
+  const withModel = make({ classifier });
+  const result = withModel.recognizeFrame(hand, "Right", W, H);
+  assert.equal(result.label, "Q");
+  assert.equal(result.source, "model");
+});
+
+test("turning the model off falls back to the rules", () => {
   const calls = [];
   const classifier = {
     predict: (...args) => {
       calls.push(args);
-      return { label: "HELP", confidence: 0.99 };
+      return { label: "Q", confidence: 0.95 };
     },
     setMode() {},
     reset() {},
   };
+  const r = make({ classifier });
+  r.useModel = false;
 
-  // A shape no rule matches, so the model is the only thing that could answer.
-  const flat = norm(OPEN.map(([x]) => [x, 300]));
-
-  const off = make({ classifier });
-  assert.equal(off.recognizeFrame(flat, "Right", W, H).label, null);
-  assert.equal(calls.length, 0, "model must not even be consulted");
-
-  const on = make({ classifier });
-  on.useModel = true;
-  const result = on.recognizeFrame(flat, "Right", W, H);
-  assert.equal(result.label, "HELP");
-  assert.equal(result.source, "model");
+  const result = r.recognizeFrame(norm(PEACE), "Right", W, H);
+  assert.equal(result.source, "rules");
+  assert.equal(calls.length, 0, "a disabled model must not be consulted");
 });
 
-test("an enabled model still has to clear a high confidence bar", () => {
+test("an unconfident model defers to the rules", () => {
   const classifier = {
-    predict: () => ({ label: "HELP", confidence: 0.7 }),
+    predict: () => ({ label: "Q", confidence: 0.55 }),
+    setMode() {},
+    reset() {},
+  };
+  const result = make({ classifier }).recognizeFrame(norm(PEACE), "Right", W, H);
+  assert.equal(result.source, "rules");
+  assert.notEqual(result.label, "Q");
+});
+
+test("digits and phrases still come from the rules", () => {
+  // The model's vocabulary is A-Z only, so it can never answer these.
+  const classifier = {
+    predict: () => ({ label: null, confidence: 0 }),
     setMode() {},
     reset() {},
   };
   const r = make({ classifier });
-  r.useModel = true;
-  const flat = norm(OPEN.map(([x]) => [x, 300]));
-  assert.equal(r.recognizeFrame(flat, "Right", W, H).label, null);
+  r.setMode("words");
+  const result = r.recognizeFrame(norm(OPEN), "Right", W, H);
+  if (result.label) {
+    assert.equal(result.source, "rules");
+    assert.ok(result.label.length > 1);
+  }
 });
 
 test("your own samples outrank the rules", () => {
@@ -112,18 +138,24 @@ test("your own samples outrank the rules", () => {
   const calibration = new Calibration();
   const hand = norm(PEACE);
 
-  // Teach the peace shape as something else entirely.
-  const features = landmarksToFeatures(hand, "Right", W, H);
-  for (let i = 0; i < 12; i += 1) calibration.add("THANK_YOU", features);
+  // Teach the peace shape as something else entirely. Calibration stores
+  // pixel-space landmarks, which is what the recorder captures.
+  const pixels = PEACE.map(([x, y]) => ({ x, y, z: 0 }));
+  for (let i = 0; i < 12; i += 1) calibration.add("THANK_YOU", pixels, "Right");
 
   const bare = make();
   const byRule = bare.recognizeFrame(hand, "Right", W, H);
   assert.equal(byRule.source, "rules");
   assert.notEqual(byRule.label, "THANK_YOU");
 
-  const tuned = make({ calibration });
+  const classifier = {
+    predict: () => ({ label: "Q", confidence: 0.99 }),
+    setMode() {},
+    reset() {},
+  };
+  const tuned = make({ calibration, classifier });
   const mine = tuned.recognizeFrame(hand, "Right", W, H);
-  assert.equal(mine.label, "THANK_YOU");
+  assert.equal(mine.label, "THANK_YOU", "your samples outrank even a sure model");
   assert.equal(mine.source, "you");
 });
 

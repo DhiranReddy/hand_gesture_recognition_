@@ -7,7 +7,7 @@
  * disagreeing recognizers in the browser buys inconsistency, not accuracy.
  */
 
-import { landmarksToFeatures, FEATURE_LENGTH } from "./features.js?v=6";
+import { landmarksToFeatures, FEATURE_LENGTH } from "./features.js?v=9";
 
 const MIN_CONFIDENCE = 0.56;
 const MIN_MARGIN = 0.1;

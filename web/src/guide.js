@@ -86,6 +86,18 @@ export function shapeFor(label) {
   return HAND_SHAPES[label] || PHRASE_SHAPES[label] || null;
 }
 
+/**
+ * Everything the app can recognise, independent of the model's vocabulary.
+ * The model covers A-Z only; digits and phrases come from the rules, so the
+ * guide and the calibration picker must not be built from model labels alone.
+ */
+export const VOCABULARY = [
+  ...Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)),
+  ...Array.from({ length: 10 }, (_, i) => String(i)),
+  "HELLO", "YES", "NO", "PLEASE", "THANK_YOU", "HELP",
+  "LOVE", "OK", "WATER", "FOOD", "YOU",
+];
+
 export function groupLabels(labels) {
   return [
     { title: "Letters", items: labels.filter((l) => /^[A-Z]$/.test(l)) },

@@ -18,14 +18,13 @@ import {
   MODE_ALL,
   MODE_WORDS,
   MODE_LETTERS,
-} from "./classifier.js?v=6";
-import { SpellCorrector, WordProcessor } from "./words.js?v=6";
-import { Speaker } from "./speech.js?v=6";
-import { groupLabels, shapeFor, MOTION_LETTERS, CONFUSABLE } from "./guide.js?v=6";
-import { renderHand, hasDiagram, COLLISIONS } from "./handshape.js?v=6";
-import { Calibration, MIN_SAMPLES } from "./calibration.js?v=6";
-import { landmarksToFeatures } from "./features.js?v=6";
-import { Recognizer } from "./recognizer.js?v=6";
+} from "./classifier.js?v=9";
+import { SpellCorrector, WordProcessor } from "./words.js?v=9";
+import { Speaker } from "./speech.js?v=9";
+import { groupLabels, shapeFor, MOTION_LETTERS, CONFUSABLE, VOCABULARY } from "./guide.js?v=9";
+import { renderHand, hasDiagram, COLLISIONS } from "./handshape.js?v=9";
+import { Calibration, MIN_SAMPLES } from "./calibration.js?v=9";
+import { Recognizer } from "./recognizer.js?v=9";
 
 const WASM_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm";
 const LANDMARKER_TASK =
@@ -74,6 +73,7 @@ const dom = Object.fromEntries(
     "guide-btn", "guide-dialog", "guide-close", "guide-search", "guide-groups",
     "calib-select", "calib-record", "calib-forget", "calib-status", "calib-meter",
     "calib-progress", "calib-hint", "calib-summary",
+    "calib-export", "calib-import", "calib-file",
     "theme-btn", "toast",
   ].map((id) => [id.replace(/-([a-z])/g, (_, c) => c.toUpperCase()), el(id)]),
 );
@@ -91,7 +91,7 @@ const defaults = {
   skeleton: true,
   mirror: true,
   cameraId: null,
-  useModel: false,
+  useModel: true,
 };
 
 function loadSettings() {
@@ -185,9 +185,9 @@ async function loadAssets() {
   state.words = new WordProcessor(corrector, { pauseMs: settings.pauseMs });
 
   setStatus(dom.statusModel, "ready", "ok");
-  setStatus(dom.statusLabels, `${classifier.labels.length} gestures`);
-  buildGuide(classifier.labels);
-  buildCalibrationPicker(classifier.labels);
+  setStatus(dom.statusLabels, `${VOCABULARY.length} gestures`);
+  buildGuide(VOCABULARY);
+  buildCalibrationPicker(VOCABULARY);
   render();
 }
 
@@ -524,10 +524,13 @@ function step(landmarks, handedness, now) {
   );
 
   if (landmarks && state.recording) {
-    captureSample(
-      landmarksToFeatures(landmarks, handedness, dom.overlay.width, dom.overlay.height),
-      now,
-    );
+    // Store pixel-space landmarks so a recording session is also a dataset.
+    const pixels = landmarks.map((p) => ({
+      x: p.x * dom.overlay.width,
+      y: p.y * dom.overlay.height,
+      z: p.z ?? 0,
+    }));
+    captureSample(pixels, handedness, now);
   }
 
   // Recording should not also be typing.
@@ -642,6 +645,7 @@ function refreshCalibrationUI() {
     : "not calibrated";
 
   dom.calibForget.disabled = count === 0 || Boolean(state.recording);
+  dom.calibExport.disabled = calibration.total === 0;
   dom.calibRecord.disabled = !state.running || Boolean(state.recording);
 
   for (const option of dom.calibSelect.options) {
@@ -680,12 +684,12 @@ function startRecording() {
   updateRecordingMeter();
 }
 
-function captureSample(features, now) {
+function captureSample(pixels, handedness, now) {
   const rec = state.recording;
   if (!rec || now - rec.lastAt < RECORD_INTERVAL_MS) return;
 
   rec.lastAt = now;
-  if (!state.calibration.add(rec.label, features)) rec.failed = true;
+  if (!state.calibration.add(rec.label, pixels, handedness)) rec.failed = true;
   rec.taken += 1;
   updateRecordingMeter();
 
@@ -966,7 +970,35 @@ function wire() {
       state.recognizer.reset();
     }
     saveSettings();
-    toast(settings.useModel ? "Bundled model enabled" : "Using shape rules only");
+    toast(settings.useModel ? "Using trained model for letters" : "Using shape rules only");
+  });
+
+  dom.calibExport.addEventListener("click", () => {
+    const text = state.calibration.toJSONL();
+    if (!text) return toast("No samples recorded yet");
+    const blob = new Blob([text], { type: "application/jsonl" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "gesture_landmarks.jsonl";
+    link.click();
+    URL.revokeObjectURL(url);
+    toast(`Exported ${state.calibration.total} samples`);
+  });
+
+  dom.calibImport.addEventListener("click", () => dom.calibFile.click());
+  dom.calibFile.addEventListener("change", async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const added = state.calibration.fromJSONL(await file.text());
+      state.recognizer?.reset();
+      refreshCalibrationUI();
+      toast(added ? `Imported ${added} samples` : "No usable samples in that file");
+    } catch (error) {
+      toast(`Could not read that file: ${error.message}`);
+    }
+    event.target.value = "";
   });
 
   dom.calibSelect.addEventListener("change", refreshCalibrationUI);

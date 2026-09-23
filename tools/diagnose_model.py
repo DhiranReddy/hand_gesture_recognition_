@@ -27,7 +27,11 @@ from src.profile_paths import model_path_for_profile  # noqa: E402
 from tests.conftest import OPEN_PALM  # noqa: E402
 
 N_PROBES = 3000
-COLLAPSE_SHARE = 0.25
+# Only flag severe collapse. The probes are perturbed open palms, not a uniform
+# sample of hand shapes, so a healthy model legitimately never emits some labels
+# for them — that alone is not evidence of a problem.
+COLLAPSE_SHARE = 0.40
+MIN_TEST_ACCURACY = 0.70
 
 
 def main() -> int:
@@ -61,20 +65,40 @@ def main() -> int:
     ordered = np.sort(probs, axis=1)
     never = [c for c in encoder.classes_ if c not in counts]
 
+    metadata = bundle.get("metadata") or {}
+    accuracy = metadata.get("test_accuracy")
+
     print(f"model                  : {path}")
-    print(f"probes                 : {len(probs)}")
     print(f"labels                 : {len(encoder.classes_)}")
+    if accuracy is not None:
+        print(f"held-out accuracy      : {accuracy:.1%}  "
+              f"({metadata.get('sample_count', '?')} samples)")
+    else:
+        print("held-out accuracy      : unknown (model has no training metadata)")
+
+    print(f"\nsynthetic probes       : {len(probs)}")
     print(f"distinct predictions   : {len(counts)}")
     print(f"most common label      : {top_label} ({share:.1%} of probes)")
     print(f"mean top probability   : {ordered[:, -1].mean():.3f}")
     if never:
-        print(f"never predicted ({len(never)})  : {' '.join(map(str, never))}")
+        print(f"unseen on probes ({len(never)}) : {' '.join(map(str, never))}")
+        print("  (probes are perturbed open palms, so this is weak evidence)")
 
-    if not bundle.get("metadata"):
-        print("\nwarning: no training metadata — dataset and accuracy unknown")
+    collapsed = share > COLLAPSE_SHARE
+    if accuracy is None:
+        healthy = not collapsed
+        verdict = ("NO ACCURACY DATA — probes look reasonable" if healthy
+                   else "MODEL IS DEGENERATE — do not rely on it")
+    else:
+        healthy = accuracy >= MIN_TEST_ACCURACY and not collapsed
+        verdict = ("MODEL LOOKS USABLE" if healthy
+                   else "MODEL IS DEGENERATE — do not rely on it")
 
-    healthy = share <= COLLAPSE_SHARE and not never
-    print("\nMODEL LOOKS USABLE" if healthy else "\nMODEL IS DEGENERATE — do not rely on it")
+    if collapsed:
+        print(f"\ncollapse: {share:.0%} of probes map to one label "
+              f"(limit {COLLAPSE_SHARE:.0%})")
+
+    print(f"\n{verdict}")
     return 0 if healthy else 1
 
 

@@ -344,9 +344,48 @@ profiles/
 
 ## Recognition
 
-### The bundled model is broken
+### Training a model
 
-`models/gesture_mlp.joblib` is degenerate. Probed across 3000 hand poses:
+The original training set was lost, so there is a tool to rebuild one from a
+public dataset rather than recording thousands of samples by hand:
+
+```bash
+python tools/fetch_dataset.py      # download images, extract landmarks (~5 min)
+python train_gesture_model.py --min-samples-per-label 20 --show-report
+python tools/diagnose_model.py     # is the result actually usable?
+python tools/export_web_assets.py  # publish it to the web app
+python tools/check_web_parity.py   # JS inference still matches Python
+```
+
+`fetch_dataset.py` pulls an ASL alphabet image set from Hugging Face, runs
+MediaPipe over every image, and writes `data/gesture_landmarks.jsonl` — the same
+format `capture_gesture_dataset.py` produces. MediaPipe finds a hand in about
+77% of the images, giving ~8,400 samples across A–Z (250–355 per letter).
+
+The current model trains to **90.0% accuracy** on a held-out 20% split
+(1,683 samples). Weakest letters are Q (f1 0.76), R (0.77) and U (0.78).
+
+> **Licensing:** the default dataset declares no license on its dataset card.
+> That is fine for local experiments, but confirm terms before deploying a model
+> trained on it publicly. Use `--dataset` to point at a source you have cleared.
+
+### Recording your own data
+
+The browser's *Teach your hand* panel is also a data collector. **Export
+dataset** writes `gesture_landmarks.jsonl` in the same format, so samples
+recorded in the browser can be merged into a training run:
+
+```bash
+cat ~/Downloads/gesture_landmarks.jsonl >> data/gesture_landmarks.jsonl
+python train_gesture_model.py --min-samples-per-label 20 --show-report
+```
+
+**Import** loads such a file back into the browser, so a calibration set can be
+shared between machines.
+
+### A note on validating models
+
+The model that originally shipped was degenerate. Probed across 3000 hand poses:
 
 | measure | value |
 |---|---|
@@ -358,16 +397,26 @@ It answers `HELP` at 0.94 confidence for a plain V sign. Its training set is
 missing and its architecture does not match `_build_classifier()`, so it can be
 neither retrained nor evaluated. Reproduce with `tools/diagnose_model.py`.
 
-**The web app therefore does not use it by default.** Recognition runs on the
-ported geometric rules, with the model available behind a toggle.
+That model has been replaced by one trained on the fetched dataset. The episode
+is why `tools/diagnose_model.py` exists: a collapsed classifier passes every
+smoke test while being useless in the app.
 
-### What the web app uses instead
+Note that synthetic probes can only detect collapse, not confirm quality — they
+are perturbed open palms, not a real hand distribution. The held-out accuracy in
+the model's metadata is the number to trust.
+
+### How a reading is decided
 
 1. **Your calibration samples**, when you have recorded any (highest priority)
-2. **Geometric rules** — `web/src/rules.js`, a port of `asl_alphabet.py`,
+2. **The trained model**, for A–Z, when at least 70% confident
+3. **Geometric rules** — `web/src/rules.js`, a port of `asl_alphabet.py`,
    `asl_numbers.py` and the phrase rules, verified against the Python originals
    by `tools/check_rules_parity.py` (0 mismatches over 600 hands)
-3. **The bundled model** — off by default, and even when on must clear 0.8
+
+Digits and phrases are outside the model's vocabulary, so the rules own those
+outright. Which source is better on any given webcam is genuinely unknown — the
+model's accuracy is measured on posed photographs, not live video — so it stays
+switchable rather than assumed correct.
 
 ### Personal calibration
 

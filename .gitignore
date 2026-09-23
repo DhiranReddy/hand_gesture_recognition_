@@ -13,3 +13,6 @@ reports/
 # Python test/dev
 .pytest_cache/
 tests/__pycache__/
+
+# Regenerate with tools/fetch_dataset.py rather than committing 11MB
+data/gesture_landmarks.jsonl
