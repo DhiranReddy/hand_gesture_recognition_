@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..700&family=Inter:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=2" />
+    <link rel="stylesheet" href="./styles.css?v=5" />
     <link
       rel="icon"
       href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👋</text></svg>"
@@ -175,6 +175,35 @@
         </div>
 
         <div class="card">
+          <div class="card-head">
+            <h2 class="card-title">Teach your hand</h2>
+            <span class="note" id="calib-summary">not calibrated</span>
+          </div>
+          <p class="hint hint-tight">
+            The built-in recogniser was trained on other people's hands. Record a
+            few examples of a gesture as <em>you</em> make it and Signal will
+            match yours first.
+          </p>
+          <label class="field">
+            <span class="field-label">Gesture</span>
+            <select id="calib-select" class="select"></select>
+          </label>
+          <div class="btn-grid">
+            <button type="button" id="calib-record" class="btn btn-primary" disabled>
+              Record
+            </button>
+            <button type="button" id="calib-forget" class="btn btn-quiet" disabled>
+              Forget
+            </button>
+          </div>
+          <div class="calib-status" id="calib-status" hidden>
+            <div class="meter meter-inline" aria-hidden="true"><i id="calib-meter"></i></div>
+            <span id="calib-progress">0 / 15</span>
+          </div>
+          <p class="hint" id="calib-hint">Enable the camera to record samples.</p>
+        </div>
+
+        <div class="card">
           <h2 class="card-title">Transcript</h2>
           <div class="btn-grid">
             <button type="button" id="space-btn" class="btn btn-quiet">Space</button>
@@ -310,6 +339,6 @@
         }, 15000);
       })();
     </script>
-    <script type="module" src="./src/main.js?v=2"></script>
+    <script type="module" src="./src/main.js?v=5"></script>
   </body>
 </html>

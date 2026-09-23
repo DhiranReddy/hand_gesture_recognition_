@@ -7,7 +7,7 @@
  * disagreeing recognizers in the browser buys inconsistency, not accuracy.
  */
 
-import { landmarksToFeatures, FEATURE_LENGTH } from "./features.js?v=2";
+import { landmarksToFeatures, FEATURE_LENGTH } from "./features.js?v=5";
 
 const MIN_CONFIDENCE = 0.56;
 const MIN_MARGIN = 0.1;
@@ -96,6 +96,12 @@ export class GestureClassifier {
       return true;
     });
     this.reset();
+  }
+
+  /** Whether the current mode permits this label. */
+  isAllowed(label) {
+    const index = this.labels.indexOf(label);
+    return index !== -1 && this.allowed[index];
   }
 
   /** Raw single-frame prediction with no smoothing. */

@@ -342,11 +342,32 @@ profiles/
 - Webcam
 - macOS, Linux, or Windows
 
+## Improving recognition
+
+The shipped model was trained on other people's hands and its training set is
+missing, so its accuracy on any given person is unknown and cannot be improved
+by retraining. The web app works around this with **personal calibration**:
+
+1. Pick a gesture under *Teach your hand*.
+2. Hold the shape and press **Record** — 15 samples, moving your hand slightly.
+3. From 5 samples up, your own examples are matched first. The live readout
+   shows `· yours` when a reading came from them.
+
+Samples are 73-d feature vectors in `localStorage` — the same features the model
+uses, so the two are directly comparable. Nothing is uploaded.
+
+The gesture guide flags the shapes a still-image recogniser genuinely cannot
+separate (`O`/`0`, `V`/`2`, `F`/`9`, a held `J`/`I`) and notes that the shipped
+rules pinch the wrong finger for `7` and `8`. Switching to Letters or Words mode
+removes the cross-category collisions.
+
 ## Tests
 
 ```bash
 pip install pytest
-python -m pytest tests/ -q
+python -m pytest tests/ -q          # feature invariants, buffering, datasets
+node --test "web/test/*.test.mjs"   # calibration k-NN
+python tools/check_web_parity.py    # JS inference == Python inference
 ```
 
 Covers feature-extraction invariants (translation/scale/handedness), the

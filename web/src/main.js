@@ -18,10 +18,13 @@ import {
   MODE_ALL,
   MODE_WORDS,
   MODE_LETTERS,
-} from "./classifier.js?v=2";
-import { SpellCorrector, WordProcessor } from "./words.js?v=2";
-import { Speaker } from "./speech.js?v=2";
-import { groupLabels, shapeFor, MOTION_LETTERS, CONFUSABLE } from "./guide.js?v=2";
+} from "./classifier.js?v=5";
+import { SpellCorrector, WordProcessor } from "./words.js?v=5";
+import { Speaker } from "./speech.js?v=5";
+import { groupLabels, shapeFor, MOTION_LETTERS, CONFUSABLE } from "./guide.js?v=5";
+import { renderHand, hasDiagram, COLLISIONS } from "./handshape.js?v=5";
+import { Calibration, MIN_SAMPLES } from "./calibration.js?v=5";
+import { landmarksToFeatures } from "./features.js?v=5";
 
 const WASM_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm";
 const LANDMARKER_TASK =
@@ -68,6 +71,8 @@ const dom = Object.fromEntries(
     "camera-field", "camera-select", "skeleton-toggle", "mirror-toggle",
     "status-model", "status-labels", "status-camera",
     "guide-btn", "guide-dialog", "guide-close", "guide-search", "guide-groups",
+    "calib-select", "calib-record", "calib-forget", "calib-status", "calib-meter",
+    "calib-progress", "calib-hint", "calib-summary",
     "theme-btn", "toast",
   ].map((id) => [id.replace(/-([a-z])/g, (_, c) => c.toUpperCase()), el(id)]),
 );
@@ -121,7 +126,13 @@ const state = {
   channel: null,
   presenter: null,
   entries: [],
+  calibration: new Calibration(),
+  recording: null,
 };
+
+const RECORD_TARGET = 15;
+/** Space samples out so a burst of near-identical frames is not recorded. */
+const RECORD_INTERVAL_MS = 120;
 
 /* -------------------------------------------------------------- helpers */
 
@@ -171,6 +182,7 @@ async function loadAssets() {
   setStatus(dom.statusModel, "ready", "ok");
   setStatus(dom.statusLabels, `${classifier.labels.length} gestures`);
   buildGuide(classifier.labels);
+  buildCalibrationPicker(classifier.labels);
   render();
 }
 
@@ -200,6 +212,143 @@ function flagEl(text, title) {
   return flag;
 }
 
+/**
+ * One guide entry: a button that expands to show how the shape is formed.
+ * The diagram is built on first open so the dialog does not construct 36 SVGs
+ * before anyone asks for one.
+ */
+function guideRow(item) {
+  const row = document.createElement("div");
+  row.className = "guide-item";
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "guide-trigger";
+  button.setAttribute("aria-expanded", "false");
+
+  const key = document.createElement("span");
+  key.className = "guide-key";
+  key.textContent = item.label.length === 1 ? item.label : item.text;
+
+  const desc = document.createElement("span");
+  desc.className = "guide-desc";
+  desc.textContent = item.shape || item.text;
+  if (item.motion) {
+    desc.append(flagEl("motion", "Needs movement — held still it reads as another sign."));
+  }
+  if (item.confusable) {
+    desc.append(flagEl("similar", "Differs from a nearby gesture by one finger."));
+  }
+
+  const chevron = document.createElement("span");
+  chevron.className = "guide-chevron";
+  chevron.setAttribute("aria-hidden", "true");
+  chevron.textContent = "›";
+
+  button.append(key, desc, chevron);
+
+  const panel = document.createElement("div");
+  panel.className = "guide-detail";
+  panel.hidden = true;
+
+  let built = false;
+  button.addEventListener("click", () => {
+    const open = !panel.hidden;
+    // Accordion: only one entry expanded at a time keeps the dialog scannable.
+    for (const other of dom.guideGroups.querySelectorAll(".guide-detail")) {
+      other.hidden = true;
+    }
+    for (const other of dom.guideGroups.querySelectorAll(".guide-trigger")) {
+      other.setAttribute("aria-expanded", "false");
+      other.classList.remove("open");
+    }
+    if (open) return;
+
+    if (!built) {
+      buildGuideDetail(panel, item);
+      built = true;
+    }
+    panel.hidden = false;
+    button.setAttribute("aria-expanded", "true");
+    button.classList.add("open");
+    panel.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  });
+
+  row.append(button, panel);
+  return row;
+}
+
+function buildGuideDetail(panel, item) {
+  const diagram = document.createElement("div");
+  diagram.className = "hand-figure";
+  const svg = hasDiagram(item.label) ? renderHand(item.label) : null;
+  if (svg) {
+    diagram.append(svg);
+  } else {
+    const fallback = document.createElement("span");
+    fallback.className = "hand-missing";
+    fallback.textContent = "No diagram for this phrase yet";
+    diagram.append(fallback);
+  }
+
+  const body = document.createElement("div");
+  body.className = "hand-body";
+
+  const how = document.createElement("p");
+  how.className = "hand-how";
+  how.textContent = item.shape || item.text;
+  body.append(how);
+
+  const steps = document.createElement("ol");
+  steps.className = "hand-steps";
+  for (const line of [
+    `Face your palm to the camera and form the shape above.`,
+    `Hold steady until the ring around the gesture closes.`,
+    item.label.length === 1
+      ? `It joins the current word; pause to commit and auto-correct it.`
+      : `It is written as a whole phrase straight away.`,
+  ]) {
+    const li = document.createElement("li");
+    li.textContent = line;
+    steps.append(li);
+  }
+  body.append(steps);
+
+  if (item.motion) {
+    body.append(
+      calloutEl(
+        "Motion sign",
+        `${item.text} is drawn in the air in real ASL. This recogniser only sees
+         still shapes, so held still it will read as another sign.`,
+      ),
+    );
+  }
+
+  const clash = COLLISIONS[item.label];
+  if (clash) {
+    body.append(
+      calloutEl(
+        `Looks like ${clash.with.join(", ")}`,
+        `${clash.why} Switch the recognition mode to Letters or Words to rule out
+         the other category.`,
+      ),
+    );
+  }
+
+  panel.append(diagram, body);
+}
+
+function calloutEl(title, text) {
+  const box = document.createElement("div");
+  box.className = "hand-callout";
+  const strong = document.createElement("strong");
+  strong.textContent = title;
+  const span = document.createElement("span");
+  span.textContent = text.replace(/\s+/g, " ").trim();
+  box.append(strong, span);
+  return box;
+}
+
 function renderGuide(query) {
   const q = query.trim().toLowerCase();
   dom.guideGroups.replaceChildren();
@@ -224,29 +373,7 @@ function renderGuide(query) {
     list.className = "guide-list";
 
     for (const item of items) {
-      const row = document.createElement("div");
-      row.className = "guide-item";
-
-      const key = document.createElement("span");
-      key.className = "guide-key";
-      key.textContent = item.label.length === 1 ? item.label : item.text;
-
-      const desc = document.createElement("span");
-      desc.className = "guide-desc";
-      desc.textContent = item.shape || item.text;
-      if (item.motion) {
-        desc.append(
-          flagEl("motion", "Needs movement — the static model cannot distinguish this yet."),
-        );
-      }
-      if (item.confusable) {
-        desc.append(
-          flagEl("similar", "Differs from a nearby gesture by one finger — hold it clearly."),
-        );
-      }
-
-      row.append(key, desc);
-      list.append(row);
+      list.append(guideRow(item));
     }
     section.append(heading, list);
     dom.guideGroups.append(section);
@@ -309,6 +436,7 @@ async function startCamera() {
     dom.readout.hidden = false;
     setStatus(dom.statusCamera, "live", "ok");
     listCameras();
+    refreshCalibrationUI();
 
     if (!state.running) {
       state.running = true;
@@ -382,13 +510,43 @@ function loop() {
  * does not repeat it.
  */
 function step(landmarks, handedness, now) {
-  const { classifier, words } = state;
-  const { label, confidence } = classifier.recognize(
+  const { classifier, words, calibration } = state;
+  let { label, confidence } = classifier.recognize(
     landmarks,
     handedness,
     dom.overlay.width,
     dom.overlay.height,
   );
+  let personalised = false;
+
+  // Your own recorded samples outrank the shipped model, which never saw your
+  // hand. Features are only extracted when something actually needs them.
+  if (landmarks && (state.recording || calibration.isActive)) {
+    const features = landmarksToFeatures(
+      landmarks,
+      handedness,
+      dom.overlay.width,
+      dom.overlay.height,
+    );
+    if (state.recording) captureSample(features, now);
+
+    const personal = calibration.predict(features);
+    if (personal && personal.confidence >= 0.6 && classifier.isAllowed(personal.label)) {
+      label = personal.label;
+      confidence = personal.confidence;
+      personalised = true;
+    }
+  }
+
+  // Recording should not also be typing.
+  if (state.recording) {
+    dom.readoutLabel.textContent = `Recording ${labelToText(state.recording.label)}`;
+    dom.readoutPct.textContent = `${state.recording.taken} / ${RECORD_TARGET}`;
+    dom.readoutMeter.style.width = `${(state.recording.taken / RECORD_TARGET) * 100}%`;
+    dom.hold.hidden = true;
+    return;
+  }
+
   const text = labelToText(label);
 
   if (!label) {
@@ -407,7 +565,7 @@ function step(landmarks, handedness, now) {
     return;
   }
 
-  dom.readoutLabel.textContent = text;
+  dom.readoutLabel.textContent = personalised ? `${text} \u00b7 yours` : text;
   dom.readoutPct.textContent = `${Math.round(confidence * 100)}%`;
   dom.readoutMeter.style.width = `${Math.round(confidence * 100)}%`;
   words.setPreview(text);
@@ -465,6 +623,102 @@ function addHistory(word) {
   li.append(w, t);
   dom.history.append(li);
   dom.history.scrollTop = dom.history.scrollHeight;
+}
+
+/* ---------------------------------------------------------- calibration */
+
+function buildCalibrationPicker(labels) {
+  dom.calibSelect.replaceChildren();
+  for (const label of labels) {
+    const option = document.createElement("option");
+    option.value = label;
+    option.textContent = labelToText(label);
+    dom.calibSelect.append(option);
+  }
+  refreshCalibrationUI();
+}
+
+function refreshCalibrationUI() {
+  const { calibration } = state;
+  const label = dom.calibSelect.value;
+  const count = label ? calibration.countFor(label) : 0;
+  const trained = calibration.trainedLabels.length;
+
+  dom.calibSummary.textContent = trained
+    ? `${trained} gesture${trained === 1 ? "" : "s"} tuned`
+    : "not calibrated";
+
+  dom.calibForget.disabled = count === 0 || Boolean(state.recording);
+  dom.calibRecord.disabled = !state.running || Boolean(state.recording);
+
+  for (const option of dom.calibSelect.options) {
+    const n = calibration.countFor(option.value);
+    const base = labelToText(option.value);
+    option.textContent = n ? `${base} — ${n} sample${n === 1 ? "" : "s"}` : base;
+  }
+  dom.calibSelect.value = label;
+
+  if (state.recording) return;
+
+  if (!state.running) {
+    dom.calibHint.textContent = "Enable the camera to record samples.";
+  } else if (!count) {
+    dom.calibHint.textContent =
+      `No samples yet. Hold the shape and record ${RECORD_TARGET} of them.`;
+  } else if (count < MIN_SAMPLES) {
+    dom.calibHint.textContent =
+      `${count} recorded — ${MIN_SAMPLES - count} more before it is used.`;
+  } else {
+    dom.calibHint.textContent = `${count} samples — your version is matched first.`;
+  }
+}
+
+function startRecording() {
+  if (!state.running || state.recording) return;
+  const label = dom.calibSelect.value;
+  if (!label) return;
+
+  state.recording = { label, taken: 0, lastAt: 0, failed: false };
+  dom.calibStatus.hidden = false;
+  dom.calibRecord.disabled = true;
+  dom.calibForget.disabled = true;
+  dom.calibHint.textContent =
+    `Hold ${labelToText(label)} steady, moving your hand slightly between samples.`;
+  updateRecordingMeter();
+}
+
+function captureSample(features, now) {
+  const rec = state.recording;
+  if (!rec || now - rec.lastAt < RECORD_INTERVAL_MS) return;
+
+  rec.lastAt = now;
+  if (!state.calibration.add(rec.label, features)) rec.failed = true;
+  rec.taken += 1;
+  updateRecordingMeter();
+
+  if (rec.taken >= RECORD_TARGET) stopRecording();
+}
+
+function updateRecordingMeter() {
+  const rec = state.recording;
+  if (!rec) return;
+  dom.calibProgress.textContent = `${rec.taken} / ${RECORD_TARGET}`;
+  dom.calibMeter.style.width = `${(rec.taken / RECORD_TARGET) * 100}%`;
+}
+
+function stopRecording() {
+  const rec = state.recording;
+  state.recording = null;
+  dom.calibStatus.hidden = true;
+  state.classifier?.reset();
+  refreshCalibrationUI();
+
+  if (!rec) return;
+  toast(
+    rec.failed
+      ? "Storage full — some samples were not saved"
+      : `Recorded ${rec.taken} samples for ${labelToText(rec.label)}`,
+  );
 }
 
 /* --------------------------------------------------------------- render */
@@ -709,6 +963,16 @@ function wire() {
     settings.theme = current === "dark" ? "light" : "dark";
     applyTheme();
     saveSettings();
+  });
+
+  dom.calibSelect.addEventListener("change", refreshCalibrationUI);
+  dom.calibRecord.addEventListener("click", startRecording);
+  dom.calibForget.addEventListener("click", () => {
+    const label = dom.calibSelect.value;
+    state.calibration.clear(label);
+    state.classifier?.reset();
+    refreshCalibrationUI();
+    toast(`Forgot your samples for ${labelToText(label)}`);
   });
 
   dom.guideBtn.addEventListener("click", () => dom.guideDialog.showModal());
