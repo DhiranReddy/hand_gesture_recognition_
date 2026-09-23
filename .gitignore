@@ -19,3 +19,5 @@ data/gesture_landmarks.jsonl
 
 # Legacy pickle models — use tools/migrate_model.py, then delete
 *.joblib
+web/vendor/*
+!web/vendor/manifest.json

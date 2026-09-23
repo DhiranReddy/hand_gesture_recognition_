@@ -1,0 +1,11 @@
+{
+  "files": {
+    "hand_landmarker.task": "sha256:fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+    "tasks-vision/vision_bundle.mjs": "sha256:92ba6016fd0fc8bbce237086dec6212f72a03b06d0a5ecfdc71ddc724ccdbabb",
+    "tasks-vision/wasm/vision_wasm_internal.js": "sha256:2b120e1c7272905719f7893e5f09e033ead468b46b510e6b490d93e3d94ec69c",
+    "tasks-vision/wasm/vision_wasm_internal.wasm": "sha256:35d67ac01df034a04a38cb0533d6438595bcc65c485aed61dd47c86c6c3839cd",
+    "tasks-vision/wasm/vision_wasm_nosimd_internal.js": "sha256:d206ba4e27c42a5863b4001c6d9366345f4507979cd6efd087a149ef7781ccd3",
+    "tasks-vision/wasm/vision_wasm_nosimd_internal.wasm": "sha256:17c2bff095305fcae98faa0817cbf72f13df9baf76f2067992a8624ef54d18cb"
+  },
+  "tasks_vision_version": "0.10.18"
+}

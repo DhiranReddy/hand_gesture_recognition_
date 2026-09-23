@@ -1,0 +1,8 @@
+-r requirements.txt
+
+# Tests
+pytest>=9.1.1,<10.0
+
+# tools/fetch_dataset.py: reads the Hugging Face parquet and decodes images
+pyarrow>=25.0.1,<26.0
+pillow>=12.2.0,<13.0

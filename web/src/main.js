@@ -6,10 +6,6 @@
  * presenter window. Every stage runs in the tab; no frame leaves the device.
  */
 
-import {
-  FilesetResolver,
-  HandLandmarker,
-} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18";
 
 import {
   GestureClassifier,
@@ -18,17 +14,46 @@ import {
   MODE_ALL,
   MODE_WORDS,
   MODE_LETTERS,
-} from "./classifier.js?v=11";
-import { SpellCorrector, WordProcessor } from "./words.js?v=11";
-import { Speaker } from "./speech.js?v=11";
-import { groupLabels, shapeFor, MOTION_LETTERS, CONFUSABLE, VOCABULARY } from "./guide.js?v=11";
-import { renderHand, hasDiagram, COLLISIONS } from "./handshape.js?v=11";
-import { Calibration, MIN_SAMPLES } from "./calibration.js?v=11";
-import { Recognizer } from "./recognizer.js?v=11";
+} from "./classifier.js?v=12";
+import { SpellCorrector, WordProcessor } from "./words.js?v=12";
+import { Speaker } from "./speech.js?v=12";
+import { groupLabels, shapeFor, MOTION_LETTERS, CONFUSABLE, VOCABULARY } from "./guide.js?v=12";
+import { renderHand, hasDiagram, COLLISIONS } from "./handshape.js?v=12";
+import { Calibration, MIN_SAMPLES } from "./calibration.js?v=12";
+import { Recognizer } from "./recognizer.js?v=12";
 
-const WASM_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm";
-const LANDMARKER_TASK =
-  "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+const TASKS_VERSION = "0.10.18";
+const CDN = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TASKS_VERSION}`;
+
+/**
+ * Prefer the vendored runtime when tools/vendor_runtime.py has been run, so a
+ * cold load does not depend on two third-party hosts. Falls back to the CDN so
+ * a fresh clone still works without the vendoring step.
+ */
+async function resolveRuntime() {
+  try {
+    const probe = await fetch("./vendor/manifest.json", { method: "GET" });
+    if (probe.ok) {
+      const module = await import("../vendor/tasks-vision/vision_bundle.mjs");
+      return {
+        module,
+        wasmBase: "./vendor/tasks-vision/wasm",
+        task: "./vendor/hand_landmarker.task",
+        source: "vendored",
+      };
+    }
+  } catch {
+    /* Not vendored, or unreadable — fall through to the CDN. */
+  }
+  return {
+    module: await import(`${CDN}/vision_bundle.mjs`),
+    wasmBase: `${CDN}/wasm`,
+    task:
+      "https://storage.googleapis.com/mediapipe-models/hand_landmarker/" +
+      "hand_landmarker/float16/1/hand_landmarker.task",
+    source: "cdn",
+  };
+}
 
 const HAND_CONNECTIONS = [
   [0, 1], [1, 2], [2, 3], [3, 4],
@@ -159,14 +184,18 @@ function setStatus(node, text, kind = "") {
 
 async function loadAssets() {
   setStatus(dom.statusModel, "loading…");
+  const runtime = await resolveRuntime();
+  const { FilesetResolver, HandLandmarker } = runtime.module;
+
   const [vision, classifier, corrector] = await Promise.all([
-    FilesetResolver.forVisionTasks(WASM_BASE),
+    FilesetResolver.forVisionTasks(runtime.wasmBase),
     GestureClassifier.load(`./public/model/gesture_mlp.json?v=${ASSET_VERSION}`),
     SpellCorrector.load(`./public/model/words.json?v=${ASSET_VERSION}`),
   ]);
+  state.runtimeSource = runtime.source;
 
   state.landmarker = await HandLandmarker.createFromOptions(vision, {
-    baseOptions: { modelAssetPath: LANDMARKER_TASK, delegate: "GPU" },
+    baseOptions: { modelAssetPath: runtime.task, delegate: "GPU" },
     runningMode: "VIDEO",
     numHands: 1,
     minHandDetectionConfidence: 0.7,
@@ -179,7 +208,11 @@ async function loadAssets() {
   state.recognizer.setMode(settings.mode);
   state.words = new WordProcessor(corrector, { pauseMs: settings.pauseMs });
 
-  setStatus(dom.statusModel, "ready", "ok");
+  setStatus(
+    dom.statusModel,
+    runtime.source === "vendored" ? "ready (vendored)" : "ready (cdn)",
+    "ok",
+  );
   setStatus(dom.statusLabels, `${VOCABULARY.length} gestures`);
   buildGuide(VOCABULARY);
   buildCalibrationPicker(VOCABULARY);

@@ -16,8 +16,8 @@
  * live video — so the model stays switchable rather than assumed correct.
  */
 
-import { landmarksToFeatures } from "./features.js?v=11";
-import { classifyByRules } from "./rules.js?v=11";
+import { landmarksToFeatures } from "./features.js?v=12";
+import { classifyByRules } from "./rules.js?v=12";
 
 const SMOOTH_WINDOW = 5;
 const MIN_VOTES = 3;

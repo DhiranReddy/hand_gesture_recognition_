@@ -142,7 +142,33 @@ def main() -> None:
         f" -> {metadata.get('train_samples_after_balance', 0)}"
     )
     print(f"Augmented samples created: {metadata.get('augmented_samples_created', 0)}")
-    print(f"Validation accuracy: {metadata.get('test_accuracy', 0.0):.2%}")
+    print()
+
+    accuracy = metadata.get("test_accuracy", 0.0)
+    print(f"Held-out accuracy : {accuracy:.2%}  ({len(metadata.get('split', {}).get('test_indices', []))} samples)")
+
+    cv_mean = metadata.get("cv_accuracy_mean")
+    if cv_mean is not None:
+        print(
+            f"Cross-validated   : {cv_mean:.2%} +/- {metadata.get('cv_accuracy_std', 0.0):.2%}"
+            f"  ({metadata.get('cv_folds')}-fold)  <- quote this one"
+        )
+
+    baselines = metadata.get("baseline_accuracy") or {}
+    if baselines:
+        print("\nMeasured against, on the same split:")
+        for name, score in sorted(baselines.items(), key=lambda kv: -kv[1]):
+            print(f"  {name:<16} {score:.2%}")
+        best_name, best_score = max(baselines.items(), key=lambda kv: kv[1])
+        if accuracy >= best_score:
+            print(f"\nThis model wins by {accuracy - best_score:+.2%} over {best_name}.")
+        else:
+            # A trained network that loses to an off-the-shelf estimator is not
+            # worth shipping; say so rather than burying it in the metadata.
+            print(
+                f"\nWARNING: {best_name} beats this model by {best_score - accuracy:.2%}. "
+                "Consider shipping that instead, or revisit the architecture."
+            )
 
     if args.show_report:
         report = metadata.get("classification_report", {})

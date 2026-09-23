@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A second push to the same branch makes the first run pointless.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install
+        run: pip install -r requirements-dev.txt
+
+      - name: Tests
+        run: python -m pytest tests/ -q
+
+  web:
+    name: Web tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Tests
+        run: node --test "web/test/*.test.mjs"
+
+  parity:
+    name: JS/Python parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install
+        run: pip install -r requirements-dev.txt
+
+      # The browser reimplements the feature extractor, the forward pass and
+      # every ASL rule. A silent divergence would make the deployed app wrong
+      # while every unit test still passed, so this gates merges.
+      - name: Rules match Python
+        run: python tools/check_rules_parity.py
+
+      - name: Inference matches Python
+        run: python tools/check_web_parity.py
+
+  model:
+    name: Model health
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install
+        run: pip install -r requirements-dev.txt
+
+      # Catches a classifier that has collapsed onto one label — which passes
+      # every other check while being useless in the app.
+      - name: Diagnose committed model
+        run: python tools/diagnose_model.py
+
+  vendor:
+    name: Vendored runtime digests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Fetches upstream and compares against the committed manifest, so an
+      # unannounced change to a dependency the camera page loads is noticed.
+      - name: Verify against manifest
+        run: python tools/vendor_runtime.py
