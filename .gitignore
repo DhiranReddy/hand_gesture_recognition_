@@ -9,3 +9,7 @@ profiles/*/gesture_landmarks.jsonl
 profiles/*/gesture_mlp.joblib
 profiles/*/reports/
 reports/
+
+# Python test/dev
+.pytest_cache/
+tests/__pycache__/

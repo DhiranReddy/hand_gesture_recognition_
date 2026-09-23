@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Signal — Sign to Captions</title>
+    <meta
+      name="description"
+      content="Turn hand gestures into live captions for video calls. Runs entirely in your browser — your camera never leaves your device."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👋</text></svg>"
+    />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">👋</span>
+        <div>
+          <h1>Signal</h1>
+          <p class="tagline">Sign to live captions</p>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <span class="privacy-badge" title="All recognition happens locally in this tab.">
+          <span class="dot" aria-hidden="true"></span> On-device
+        </span>
+        <button type="button" id="help-btn" class="ghost-btn" aria-expanded="false">
+          Gesture guide
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <section class="stage" aria-label="Camera and recognition">
+        <div class="video-wrap" id="video-wrap">
+          <video id="video" playsinline muted aria-hidden="true"></video>
+          <canvas id="overlay"></canvas>
+
+          <div class="idle-panel" id="idle-panel">
+            <h2>Ready when you are</h2>
+            <p>
+              Signal reads your hand from the camera and writes what you sign.
+              Nothing is uploaded — recognition runs inside this tab.
+            </p>
+            <button type="button" id="start-btn" class="primary-btn">
+              Enable camera
+            </button>
+            <p class="idle-note" id="idle-note">Requires a webcam and a modern browser.</p>
+          </div>
+
+          <div class="hud" id="hud" hidden>
+            <div class="hud-chip" id="fps-chip">— fps</div>
+            <div class="hud-chip" id="pred-chip">No hand detected</div>
+          </div>
+
+          <div class="hold-indicator" id="hold-indicator" hidden>
+            <svg viewBox="0 0 44 44" aria-hidden="true">
+              <circle class="hold-track" cx="22" cy="22" r="19" />
+              <circle class="hold-fill" id="hold-fill" cx="22" cy="22" r="19" />
+            </svg>
+            <span id="hold-label">Hold</span>
+          </div>
+        </div>
+
+        <div class="caption-panel">
+          <div class="caption-head">
+            <span class="caption-title">Captions</span>
+            <span class="caption-correction" id="correction" aria-live="polite"></span>
+          </div>
+          <p
+            class="caption-text"
+            id="caption-text"
+            role="status"
+            aria-live="polite"
+            aria-atomic="false"
+          >
+            <span class="caption-placeholder">Your signed words appear here…</span>
+          </p>
+          <p class="caption-preview" id="caption-preview" aria-hidden="true"></p>
+        </div>
+      </section>
+
+      <aside class="sidebar">
+        <div class="panel">
+          <h2>Controls</h2>
+          <div class="control-grid">
+            <button type="button" id="space-btn" class="ghost-btn">Space</button>
+            <button type="button" id="back-btn" class="ghost-btn">Backspace</button>
+            <button type="button" id="copy-btn" class="ghost-btn">Copy</button>
+            <button type="button" id="clear-btn" class="ghost-btn danger">Clear</button>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="skeleton-toggle" checked />
+            <span>Show hand skeleton</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="mirror-toggle" checked />
+            <span>Mirror video</span>
+          </label>
+          <label class="slider">
+            <span
+              >Hold time <output id="hold-out">0.33s</output></span
+            >
+            <input type="range" id="hold-range" min="150" max="1200" step="10" value="330" />
+          </label>
+          <label class="slider">
+            <span>Pause before space <output id="pause-out">0.73s</output></span>
+            <input type="range" id="pause-range" min="300" max="2500" step="10" value="730" />
+          </label>
+        </div>
+
+        <div class="panel">
+          <h2>Presentation</h2>
+          <p class="panel-note">
+            Open a clean caption window and share just that window in Zoom, Meet,
+            or Teams.
+          </p>
+          <button type="button" id="present-btn" class="primary-btn wide">
+            Open caption window
+          </button>
+        </div>
+
+        <div class="panel" id="status-panel">
+          <h2>Status</h2>
+          <dl class="status-list">
+            <div><dt>Model</dt><dd id="status-model">not loaded</dd></div>
+            <div><dt>Labels</dt><dd id="status-labels">—</dd></div>
+            <div><dt>Camera</dt><dd id="status-camera">off</dd></div>
+          </dl>
+        </div>
+      </aside>
+    </main>
+
+    <dialog id="help-dialog">
+      <div class="dialog-head">
+        <h2>What you can sign</h2>
+        <button type="button" id="help-close" class="ghost-btn" aria-label="Close">✕</button>
+      </div>
+      <div class="dialog-body">
+        <p>
+          Hold a shape steady until the ring fills. Letters collect into a word;
+          pause briefly and the word is committed with a space.
+        </p>
+        <div id="label-groups"></div>
+        <h3>Keyboard</h3>
+        <ul class="keylist">
+          <li><kbd>Space</kbd> insert a space</li>
+          <li><kbd>Backspace</kbd> delete last character</li>
+          <li><kbd>C</kbd> clear transcript</li>
+          <li><kbd>V</kbd> copy transcript</li>
+          <li><kbd>H</kbd> toggle skeleton</li>
+          <li><kbd>?</kbd> this guide</li>
+        </ul>
+      </div>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

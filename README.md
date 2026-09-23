@@ -2,6 +2,50 @@
 
 Real-time assistive communication for people who cannot speak. Show hand gestures to the camera and your message appears as **live captions** — designed to work alongside **Zoom**, **Google Meet**, and **Microsoft Teams**.
 
+## Two ways to run it
+
+| | Web app (`web/`) | Desktop app (`main.py`) |
+|---|---|---|
+| **For** | Anyone, via a URL | Capturing data, training, benchmarking |
+| **Install** | None | Python + MediaPipe + OpenCV |
+| **Inference** | In-browser (WASM + exported MLP) | Python |
+| **Camera data** | Never leaves the device | Local |
+
+The web app is the shippable product; the Python side is the training toolchain
+that produces the model it runs.
+
+### Run the web app locally
+
+```bash
+python3 -m http.server 4173 --directory web
+```
+
+Then open <http://localhost:4173>. Camera access needs `localhost` or HTTPS.
+
+### Deploy it
+
+It is a static site — no server, no build step. `vercel.json` is included:
+
+```bash
+npx vercel deploy --prod
+```
+
+Netlify, Cloudflare Pages, or GitHub Pages work the same way; publish the `web/`
+directory. Hosting cost is zero and it scales to any number of users, because
+every visitor's browser does its own inference.
+
+### Regenerate the web model after retraining
+
+The browser loads JSON, not joblib. After training, re-export and re-verify:
+
+```bash
+python tools/export_web_assets.py            # joblib -> web/public/model/*.json
+python tools/check_web_parity.py             # asserts JS == Python
+```
+
+`check_web_parity.py` runs 200 random hands through both pipelines and fails if
+features, confidences, or labels diverge. Run it before any deploy.
+
 ## What You Can Sign
 
 | Category | Coverage |
@@ -280,3 +324,14 @@ profiles/
 - Python 3.9+
 - Webcam
 - macOS, Linux, or Windows
+
+## Tests
+
+```bash
+pip install pytest
+python -m pytest tests/ -q
+```
+
+Covers feature-extraction invariants (translation/scale/handedness), the
+fingerspelling buffer and autocorrect, dataset validation, and profile path
+sanitization.
