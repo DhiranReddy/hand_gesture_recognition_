@@ -132,7 +132,7 @@ def classify_phrase(landmarks: list[tuple], handedness: str) -> str | None:
         return "SORRY"
 
     if all(f == "extended" for f in s):
-        return "HELLO"
+        return "HELLO" if index_middle_spread(landmarks) else "NICE"
 
     if index == "extended" and middle == "extended" and ring == "extended" and pinky == "extended" and index_middle_spread(landmarks):
         return "EMERGENCY"
@@ -191,7 +191,7 @@ def classify_phrase(landmarks: list[tuple], handedness: str) -> str | None:
     if thumb == "extended" and pinky == "extended" and index == "curled" and middle == "curled" and ring == "curled":
         return "NOW"
 
-    if thumb == "extended" and pinky == "extended" and index == "curled" and middle == "curled" and ring == "curled":
+    if index == "extended" and middle == "extended" and ring == "curled" and pinky == "curled" and thumb == "bent" and index_middle_spread(landmarks):
         return "CAN_YOU_SEE"
 
     if index == "extended" and middle == "curled" and ring == "curled" and pinky == "curled" and thumb == "curled":
@@ -262,8 +262,5 @@ def classify_phrase(landmarks: list[tuple], handedness: str) -> str | None:
 
     if index == "bent" and middle == "extended" and ring == "curled" and pinky == "curled" and thumb == "curled":
         return "MAYBE"
-
-    if index == "extended" and middle == "extended" and ring == "extended" and pinky == "extended" and thumb == "extended":
-        return "NICE"
 
     return None

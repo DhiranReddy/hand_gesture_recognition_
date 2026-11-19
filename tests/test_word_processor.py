@@ -108,3 +108,19 @@ def test_add_space_commits_pending_buffer(words):
     words.add_space()
     assert words.buffer == ""
     assert words.transcript == "help "
+
+
+def test_double_letter_buffering(words):
+    spell(words, "HELLO")
+    assert words.buffer == "HELLO"
+    words.force_flush()
+    assert words.transcript == "hello"
+
+
+def test_numbers_never_autocorrect_to_i(words):
+    for num in ["10", "12", "42", "2026"]:
+        words.clear()
+        for ch in num:
+            words.add_gesture(ch, "number")
+        words.force_flush()
+        assert words.transcript == num

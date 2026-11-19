@@ -40,7 +40,6 @@ def copy_to_clipboard(text: str) -> bool:
             proc = subprocess.Popen(
                 ["clip"],
                 stdin=subprocess.PIPE,
-                shell=True,
             )
             proc.communicate(text.encode("utf-16le"))
             return proc.returncode == 0

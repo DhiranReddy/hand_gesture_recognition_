@@ -36,13 +36,16 @@ async function resolveRuntime() {
   try {
     const probe = await fetch("./vendor/manifest.json", { method: "GET" });
     if (probe.ok) {
-      const module = await import("../vendor/tasks-vision/vision_bundle.mjs");
-      return {
-        module,
-        wasmBase: "./vendor/tasks-vision/wasm",
-        task: "./vendor/hand_landmarker.task",
-        source: "vendored",
-      };
+      const bundleProbe = await fetch("./vendor/tasks-vision/vision_bundle.mjs", { method: "HEAD" });
+      if (bundleProbe.ok) {
+        const module = await import("../vendor/tasks-vision/vision_bundle.mjs");
+        return {
+          module,
+          wasmBase: "./vendor/tasks-vision/wasm",
+          task: "./vendor/hand_landmarker.task",
+          source: "vendored",
+        };
+      }
     }
   } catch {
     /* Not vendored, or unreadable — fall through to the CDN. */
@@ -159,6 +162,7 @@ const state = {
   entries: [],
   calibration: new Calibration(),
   recording: null,
+  neutralSince: null,
 };
 
 const RECORD_TARGET = 15;
@@ -583,6 +587,11 @@ function step(landmarks, handedness, now) {
   const text = labelToText(label);
 
   if (!label) {
+    if (!state.neutralSince) state.neutralSince = now;
+    // After ~150ms of neutral pose or no hand, allow the same letter to be signed again (e.g. double letters "LL")
+    if (now - state.neutralSince > 150) {
+      state.lastCommitted = "";
+    }
     state.currentLabel = null;
     state.holdStart = 0;
     words.clearPreview();
@@ -597,6 +606,8 @@ function step(landmarks, handedness, now) {
     render();
     return;
   }
+
+  state.neutralSince = null;
 
   dom.readoutLabel.textContent =
     source === "you" ? `${text} \u00b7 yours` : text;

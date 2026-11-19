@@ -77,6 +77,7 @@ def main() -> int:
     current_gesture: str | None = None
     hold_count = 0
     cooldown = 0
+    idle_frames = 0
     last_added = ""
     ml_confidence = 0.0
     feedback_flash = 0
@@ -131,8 +132,13 @@ def main() -> int:
                 feedback_flash -= 1
 
             if not detected_id:
+                idle_frames += 1
+                if idle_frames >= 5:  # ~150ms neutral gap allows typing repeated letters (e.g. "LL")
+                    last_added = ""
                 if words.on_idle_frame():
                     last_added = ""
+            else:
+                idle_frames = 0
 
             if detected_id and detected_id == current_gesture:
                 hold_count += 1

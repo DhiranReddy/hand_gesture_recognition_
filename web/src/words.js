@@ -62,6 +62,10 @@ export class SpellCorrector {
   }
 
   correct(word) {
+    if (!word) return "";
+    // Never spell-correct pure numbers, digit sequences, or alphanumeric codes
+    if (/\d/.test(word)) return word;
+
     const lower = word.toLowerCase();
     if (lower.length < MIN_WORD_LENGTH || this.has(lower)) return lower;
 

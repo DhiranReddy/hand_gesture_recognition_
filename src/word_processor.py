@@ -79,7 +79,7 @@ class WordProcessor:
         self.pause_frames = 0
 
     def _autocorrect(self, word: str) -> str:
-        if len(word) < self.MIN_WORD_LENGTH:
+        if len(word) < self.MIN_WORD_LENGTH or any(c.isdigit() for c in word):
             return word
 
         lower = word.lower()

@@ -6,23 +6,6 @@ import cv2
 import mediapipe as mp
 import numpy as np
 
-from src.constants import (
-    INDEX_DIP,
-    INDEX_PIP,
-    INDEX_TIP,
-    MIDDLE_DIP,
-    MIDDLE_PIP,
-    MIDDLE_TIP,
-    PINKY_DIP,
-    PINKY_PIP,
-    PINKY_TIP,
-    RING_DIP,
-    RING_PIP,
-    RING_TIP,
-    THUMB_IP,
-    THUMB_TIP,
-    WRIST,
-)
 HAND_CONNECTIONS = (
     (0, 1), (1, 2), (2, 3), (3, 4),
     (0, 5), (5, 6), (6, 7), (7, 8),
@@ -87,47 +70,5 @@ class HandTracker:
 
         return hands
 
-    def _draw_skeleton(self, frame_bgr: np.ndarray, landmarks: list[tuple]) -> None:
-        for start, end in HAND_CONNECTIONS:
-            p1 = tuple(np.array(landmarks[start][:2], dtype=np.int32))
-            p2 = tuple(np.array(landmarks[end][:2], dtype=np.int32))
-            cv2.line(frame_bgr, p1, p2, (0, 180, 255), 2)
-
-        for x, y, _ in landmarks:
-            cv2.circle(frame_bgr, (int(x), int(y)), 3, (0, 255, 0), -1)
-
     def close(self) -> None:
         self._hands.close()
-
-
-def finger_extended(landmarks: list[tuple], tip: int, pip: int, dip: int) -> bool:
-    """Check if a finger is extended using tip-to-pip distance vs pip-to-dip."""
-    tip_pt = np.array(landmarks[tip][:2])
-    pip_pt = np.array(landmarks[pip][:2])
-    dip_pt = np.array(landmarks[dip][:2])
-    return np.linalg.norm(tip_pt - pip_pt) > np.linalg.norm(pip_pt - dip_pt) * 0.85
-
-
-def thumb_extended(landmarks: list[tuple], handedness: str) -> bool:
-    """Thumb extension depends on hand orientation."""
-    tip = np.array(landmarks[THUMB_TIP][:2])
-    ip = np.array(landmarks[THUMB_IP][:2])
-    wrist = np.array(landmarks[WRIST][:2])
-
-    tip_dist = np.linalg.norm(tip - wrist)
-    ip_dist = np.linalg.norm(ip - wrist)
-
-    if handedness == "Right":
-        return tip_dist > ip_dist * 1.1 and tip[0] > ip[0]
-    return tip_dist > ip_dist * 1.1 and tip[0] < ip[0]
-
-
-def get_finger_states(landmarks: list[tuple], handedness: str) -> list[bool]:
-    """Return [thumb, index, middle, ring, pinky] extension states."""
-    return [
-        thumb_extended(landmarks, handedness),
-        finger_extended(landmarks, INDEX_TIP, INDEX_PIP, INDEX_DIP),
-        finger_extended(landmarks, MIDDLE_TIP, MIDDLE_PIP, MIDDLE_DIP),
-        finger_extended(landmarks, RING_TIP, RING_PIP, RING_DIP),
-        finger_extended(landmarks, PINKY_TIP, PINKY_PIP, PINKY_DIP),
-    ]
