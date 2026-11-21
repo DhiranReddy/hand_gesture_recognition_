@@ -82,6 +82,7 @@
           <div class="hud hud-top" id="hud" hidden>
             <span class="pill" id="fps-pill">— fps</span>
             <span class="pill pill-mode" id="mode-pill">All gestures</span>
+            <span class="pill" id="framing-pill" hidden>Centered</span>
           </div>
 
           <div class="readout" id="readout" hidden>
@@ -163,11 +164,16 @@
         </div>
 
         <div class="card">
-          <h2 class="card-title">Voice</h2>
+          <h2 class="card-title">Voice &amp; Audio</h2>
           <label class="switch">
             <input type="checkbox" id="speak-toggle" />
             <span class="switch-track" aria-hidden="true"><i></i></span>
             <span class="switch-text">Speak each word aloud</span>
+          </label>
+          <label class="switch">
+            <input type="checkbox" id="sfx-toggle" checked />
+            <span class="switch-track" aria-hidden="true"><i></i></span>
+            <span class="switch-text">Chime on gesture confirm</span>
           </label>
           <div id="voice-fields" hidden>
             <label class="field">
@@ -229,7 +235,13 @@
         </div>
 
         <div class="card">
-          <h2 class="card-title">Transcript</h2>
+          <h2 class="card-title">Transcript &amp; Punctuation</h2>
+          <div class="btn-grid punct-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 8px;">
+            <button type="button" class="btn btn-quiet punct-btn" data-punct="." title="Add period">. period</button>
+            <button type="button" class="btn btn-quiet punct-btn" data-punct="," title="Add comma">, comma</button>
+            <button type="button" class="btn btn-quiet punct-btn" data-punct="?" title="Add question mark">? ask</button>
+            <button type="button" class="btn btn-quiet punct-btn" data-punct="!" title="Add exclamation">! bang</button>
+          </div>
           <div class="btn-grid">
             <button type="button" id="space-btn" class="btn btn-quiet">Space</button>
             <button type="button" id="undo-btn" class="btn btn-quiet" disabled>Undo</button>

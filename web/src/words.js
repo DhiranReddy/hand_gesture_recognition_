@@ -91,9 +91,10 @@ export class SpellCorrector {
 const UNDO_DEPTH = 60;
 
 export class WordProcessor {
-  constructor(corrector, { pauseMs = PAUSE_MS } = {}) {
+  constructor(corrector, { pauseMs = PAUSE_MS, smartCase = true } = {}) {
     this.corrector = corrector;
     this.pauseMs = pauseMs;
+    this.smartCase = smartCase;
     this.transcript = "";
     this.buffer = "";
     this.preview = "";
@@ -190,10 +191,36 @@ export class WordProcessor {
     this.idleSince = null;
   }
 
+  #formatWord(word) {
+    if (!word || !this.smartCase) return word;
+    if (/^\d+$/.test(word)) return word;
+
+    const lower = word.toLowerCase();
+    if (lower === "i") return "I";
+    if (lower === "i'm") return "I'm";
+    if (lower === "i've") return "I've";
+    if (lower === "i'll") return "I'll";
+    if (lower === "i'd") return "I'd";
+
+    const isSentenceStart = !this.transcript.trim() || /[.!?]\s*$/.test(this.transcript);
+    if (isSentenceStart && word.length > 0) {
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    }
+    return word;
+  }
+
   #append(word) {
     if (!word) return;
+    const formatted = this.#formatWord(word);
     if (this.transcript && !this.transcript.endsWith(" ")) this.transcript += " ";
-    this.transcript += word;
+    this.transcript += formatted;
+  }
+
+  addPunctuation(mark) {
+    this.#snapshot();
+    this.#flushInternal();
+    if (!this.transcript.trim()) return;
+    this.transcript = this.transcript.replace(/\s+$/, "") + mark + " ";
   }
 
   addSpace() {

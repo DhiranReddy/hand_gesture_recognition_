@@ -14,7 +14,8 @@ class WordProcessor:
     PAUSE_FRAMES = 22
     MIN_WORD_LENGTH = 2
 
-    def __init__(self) -> None:
+    def __init__(self, *, smart_case: bool = False) -> None:
+        self.smart_case = smart_case
         self.transcript = ""
         self.buffer = ""
         self.preview = ""
@@ -91,12 +92,36 @@ class WordProcessor:
             return suggestion
         return lower
 
+    def _format_word(self, word: str) -> str:
+        if not word or not self.smart_case:
+            return word
+        if any(c.isdigit() for c in word):
+            return word
+        lower = word.lower()
+        if lower == "i":
+            return "I"
+        if lower in ("i'm", "i've", "i'll", "i'd"):
+            return lower.capitalize()
+        is_sentence_start = not self.transcript.strip() or any(
+            self.transcript.rstrip().endswith(p) for p in (".", "!", "?")
+        )
+        if is_sentence_start:
+            return word[0].upper() + word[1:]
+        return word
+
     def _append_word(self, word: str) -> None:
         if not word:
             return
+        formatted = self._format_word(word)
         if self.transcript and not self.transcript.endswith(" "):
             self.transcript += " "
-        self.transcript += word
+        self.transcript += formatted
+
+    def add_punctuation(self, mark: str) -> None:
+        self._flush_buffer()
+        if not self.transcript.strip():
+            return
+        self.transcript = self.transcript.rstrip() + mark + " "
 
     def add_space(self) -> None:
         self._flush_buffer()

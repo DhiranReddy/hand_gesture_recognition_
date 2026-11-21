@@ -23,6 +23,7 @@ import {
 import { renderHand, hasDiagram, COLLISIONS } from "./handshape.js?v=13";
 import { Calibration, MIN_SAMPLES } from "./calibration.js?v=13";
 import { Recognizer } from "./recognizer.js?v=13";
+import { sfx } from "./audio.js?v=13";
 
 const TASKS_VERSION = "0.10.18";
 const CDN = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TASKS_VERSION}`;
@@ -106,6 +107,7 @@ const dom = Object.fromEntries(
     "calib-select", "calib-record", "calib-forget", "calib-status", "calib-meter",
     "calib-progress", "calib-hint", "calib-summary",
     "calib-export", "calib-import", "calib-file",
+    "framing-pill", "sfx-toggle",
     "toast",
   ].map((id) => [id.replace(/-([a-z])/g, (_, c) => c.toUpperCase()), el(id)]),
 );
@@ -117,6 +119,7 @@ const defaults = {
   holdMs: 330,
   pauseMs: 730,
   speak: false,
+  sfx: true,
   voiceURI: null,
   rate: 1,
   skeleton: true,
@@ -502,9 +505,49 @@ async function startCamera() {
 
 /* ------------------------------------------------------------ draw/loop */
 
+const FINGERTIP_INDICES = new Set([4, 8, 12, 16, 20]);
+
+function checkHandFraming(landmarks) {
+  if (!landmarks || !landmarks.length) {
+    if (dom.framingPill) dom.framingPill.hidden = true;
+    return;
+  }
+  let minX = 1, maxX = 0, minY = 1, maxY = 0;
+  for (const pt of landmarks) {
+    if (pt.x < minX) minX = pt.x;
+    if (pt.x > maxX) maxX = pt.x;
+    if (pt.y < minY) minY = pt.y;
+    if (pt.y > maxY) maxY = pt.y;
+  }
+  const spanX = maxX - minX;
+  const spanY = maxY - minY;
+
+  if (dom.framingPill) {
+    if (minX < 0.04 || maxX > 0.96 || minY < 0.04 || maxY > 0.96) {
+      dom.framingPill.hidden = false;
+      dom.framingPill.textContent = "Hand near edge";
+      dom.framingPill.className = "pill pill-warning";
+    } else if (spanX < 0.13 && spanY < 0.13) {
+      dom.framingPill.hidden = false;
+      dom.framingPill.textContent = "Move closer";
+      dom.framingPill.className = "pill pill-guide";
+    } else if (spanX > 0.82 || spanY > 0.82) {
+      dom.framingPill.hidden = false;
+      dom.framingPill.textContent = "Move back";
+      dom.framingPill.className = "pill pill-warning";
+    } else {
+      dom.framingPill.hidden = true;
+    }
+  }
+}
+
 function drawSkeleton(ctx, landmarks, w, h) {
-  ctx.lineWidth = Math.max(2, w / 330);
-  ctx.strokeStyle = "rgba(233, 178, 122, 0.9)";
+  ctx.save();
+  ctx.lineWidth = Math.max(2.5, w / 320);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = "rgba(224, 155, 96, 0.88)";
+
   ctx.beginPath();
   for (const [a, b] of HAND_CONNECTIONS) {
     ctx.moveTo(landmarks[a].x * w, landmarks[a].y * h);
@@ -512,13 +555,27 @@ function drawSkeleton(ctx, landmarks, w, h) {
   }
   ctx.stroke();
 
-  ctx.fillStyle = "rgba(253, 248, 240, 0.95)";
-  const r = Math.max(2.5, w / 270);
-  for (const point of landmarks) {
+  const r = Math.max(2.8, w / 260);
+  for (let i = 0; i < landmarks.length; i += 1) {
+    const point = landmarks[i];
+    const px = point.x * w;
+    const py = point.y * h;
+    const isTip = FINGERTIP_INDICES.has(i);
+
     ctx.beginPath();
-    ctx.arc(point.x * w, point.y * h, r, 0, Math.PI * 2);
+    ctx.arc(px, py, isTip ? r * 1.3 : r, 0, Math.PI * 2);
+    ctx.fillStyle = isTip ? "rgba(255, 230, 180, 0.98)" : "rgba(253, 248, 240, 0.92)";
     ctx.fill();
+
+    if (isTip) {
+      ctx.beginPath();
+      ctx.arc(px, py, r * 1.8, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(164, 103, 61, 0.65)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
   }
+  ctx.restore();
 }
 
 function loop() {
@@ -538,6 +595,8 @@ function loop() {
     const result = state.landmarker.detectForVideo(video, now);
     const landmarks = result.landmarks?.[0] || null;
     const handedness = result.handednesses?.[0]?.[0]?.categoryName || "Right";
+
+    checkHandFraming(landmarks);
 
     const ctx = overlay.getContext("2d");
     ctx.clearRect(0, 0, overlay.width, overlay.height);
@@ -632,6 +691,7 @@ function step(landmarks, handedness, now) {
     state.holdStart = now;
     words.clearPreview();
     dom.hold.hidden = true;
+    sfx.playLock();
     commitFeedback(words.lastCommitted);
   }
 
@@ -645,6 +705,7 @@ function commitFeedback(word) {
   dom.viewport.classList.add("committed");
 
   if (!word) return;
+  sfx.playCommit();
   state.speaker.speak(word);
   addHistory(word);
 }
@@ -853,6 +914,10 @@ function applySettingsToUI() {
 
   dom.modelToggle.checked = settings.useModel;
   dom.speakToggle.checked = settings.speak;
+  if (dom.sfxToggle) {
+    dom.sfxToggle.checked = settings.sfx !== false;
+    sfx.enabled = settings.sfx !== false;
+  }
   dom.voiceFields.hidden = !settings.speak;
   dom.rateRange.value = settings.rate;
   dom.rateOut.textContent = `${Number(settings.rate).toFixed(1)}×`;
@@ -943,6 +1008,22 @@ function wire() {
     dom.voiceFields.hidden = !settings.speak || !state.speaker.voices.length;
     if (!settings.speak) state.speaker.stop();
     saveSettings();
+  });
+  dom.sfxToggle?.addEventListener("change", (e) => {
+    settings.sfx = e.target.checked;
+    sfx.enabled = settings.sfx;
+    saveSettings();
+  });
+  document.querySelectorAll(".punct-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const p = btn.dataset.punct;
+      if (p) {
+        state.words?.addPunctuation(p);
+        state.lastCommitted = "";
+        render();
+        sfx.playLock();
+      }
+    });
   });
   dom.voiceSelect.addEventListener("change", (e) => {
     settings.voiceURI = e.target.value;
@@ -1093,6 +1174,13 @@ function onKeyDown(event) {
     event.preventDefault();
     state.words.addSpace();
     state.lastCommitted = "";
+  } else if (event.key === "." || event.key === "," || event.key === "?" || event.key === "!") {
+    event.preventDefault();
+    state.words.addPunctuation(event.key);
+    state.lastCommitted = "";
+    sfx.playLock();
+    render();
+    return;
   } else if (event.key === "Backspace") {
     event.preventDefault();
     state.words.backspace();

@@ -124,3 +124,22 @@ def test_numbers_never_autocorrect_to_i(words):
             words.add_gesture(ch, "number")
         words.force_flush()
         assert words.transcript == num
+
+
+def test_smart_case_and_punctuation():
+    wp = WordProcessor(smart_case=True)
+    spell(wp, "HELP")
+    wp.force_flush()
+    assert wp.transcript == "Help"
+
+    wp.add_punctuation("!")
+    assert wp.transcript == "Help! "
+
+    spell(wp, "YES")
+    wp.force_flush()
+    assert wp.transcript == "Help! Yes"
+
+    wp.add_punctuation(".")
+    spell(wp, "I")
+    wp.force_flush()
+    assert wp.transcript == "Help! Yes. I"

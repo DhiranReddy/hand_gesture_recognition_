@@ -13,7 +13,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..700&family=Inter:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..700&family=Inter:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
     <style>
@@ -22,6 +22,26 @@
         --fg: #241e17;
         --dim: #857868;
         --clay: #a4673d;
+        --font-scale: 1;
+      }
+      body[data-theme="dark"] {
+        --bg: #14110e;
+        --fg: #f5eee4;
+        --dim: #a89a88;
+        --clay: #d68f5d;
+      }
+      body[data-theme="contrast"] {
+        --bg: #000000;
+        --fg: #ffff00;
+        --dim: #ffffff;
+        --clay: #00ffff;
+      }
+      body[data-theme="transparent"] {
+        --bg: transparent;
+        --fg: #ffffff;
+        --dim: #cccccc;
+        --clay: #ffd166;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8), 0 0 10px rgba(0, 0, 0, 0.6);
       }
       * { box-sizing: border-box; }
       html, body { height: 100%; margin: 0; }
@@ -36,10 +56,11 @@
         font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
         -webkit-font-smoothing: antialiased;
         cursor: default;
+        transition: background-color 0.2s ease, color 0.2s ease;
       }
       #caption {
         font-family: "Fraunces", ui-serif, Georgia, serif;
-        font-size: clamp(30px, 8.5vw, 86px);
+        font-size: calc(clamp(32px, 8.5vw, 88px) * var(--font-scale));
         font-weight: 500;
         font-variation-settings: "opsz" 144;
         line-height: 1.14;
@@ -52,7 +73,7 @@
       #caption::-webkit-scrollbar { display: none; }
       #caption.idle {
         font-family: "Inter", sans-serif;
-        font-size: clamp(16px, 2.6vw, 26px);
+        font-size: calc(clamp(16px, 2.6vw, 26px) * var(--font-scale));
         font-weight: 400;
         letter-spacing: 0;
         color: var(--dim);
@@ -71,6 +92,27 @@
         text-transform: uppercase;
         color: var(--dim);
       }
+      .controls {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .btn {
+        padding: 4px 9px;
+        font-size: 10.5px;
+        font-weight: 600;
+        color: inherit;
+        background: transparent;
+        border: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+        border-radius: 6px;
+        cursor: pointer;
+        opacity: 0.75;
+        transition: opacity 0.15s ease, background 0.15s ease;
+      }
+      .btn:hover {
+        opacity: 1;
+        background: color-mix(in srgb, currentColor 10%, transparent);
+      }
       .dot {
         display: inline-block;
         width: 6px; height: 6px;
@@ -81,15 +123,72 @@
       @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
     </style>
   </head>
-  <body>
+  <body data-theme="light">
     <p id="caption" class="idle">Waiting for captions…</p>
     <div class="bar">
       <span><span class="dot"></span><span id="state">Connected</span></span>
+      <div class="controls">
+        <button type="button" class="btn" id="theme-btn" title="Cycle theme (Light, Dark, High Contrast, Transparent)">Theme: Warm</button>
+        <button type="button" class="btn" id="smaller-btn" title="Smaller font">A−</button>
+        <button type="button" class="btn" id="larger-btn" title="Larger font">A+</button>
+      </div>
     </div>
 
     <script type="module">
       const caption = document.getElementById("caption");
       const state = document.getElementById("state");
+      const themeBtn = document.getElementById("theme-btn");
+      const smallerBtn = document.getElementById("smaller-btn");
+      const largerBtn = document.getElementById("larger-btn");
+
+      const THEMES = [
+        { id: "light", label: "Theme: Warm" },
+        { id: "dark", label: "Theme: Dark" },
+        { id: "contrast", label: "Theme: Contrast" },
+        { id: "transparent", label: "Theme: Clear" }
+      ];
+      let currentThemeIdx = 0;
+      let currentScale = 1;
+
+      try {
+        const savedTheme = localStorage.getItem("signal.presenter.theme");
+        if (savedTheme) {
+          const idx = THEMES.findIndex(t => t.id === savedTheme);
+          if (idx !== -1) currentThemeIdx = idx;
+        }
+        const savedScale = localStorage.getItem("signal.presenter.scale");
+        if (savedScale) currentScale = parseFloat(savedScale) || 1;
+      } catch {}
+
+      function applyTheme() {
+        const theme = THEMES[currentThemeIdx];
+        document.body.dataset.theme = theme.id;
+        themeBtn.textContent = theme.label;
+        try { localStorage.setItem("signal.presenter.theme", theme.id); } catch {}
+      }
+
+      function applyScale() {
+        document.documentElement.style.setProperty("--font-scale", String(currentScale));
+        try { localStorage.setItem("signal.presenter.scale", String(currentScale)); } catch {}
+      }
+
+      applyTheme();
+      applyScale();
+
+      themeBtn.addEventListener("click", () => {
+        currentThemeIdx = (currentThemeIdx + 1) % THEMES.length;
+        applyTheme();
+      });
+
+      smallerBtn.addEventListener("click", () => {
+        currentScale = Math.max(0.65, currentScale - 0.1);
+        applyScale();
+      });
+
+      largerBtn.addEventListener("click", () => {
+        currentScale = Math.min(1.6, currentScale + 0.1);
+        applyScale();
+      });
 
       function render({ text = "", live = "" } = {}) {
         caption.replaceChildren();
@@ -114,7 +213,6 @@
       const channel = new BroadcastChannel("signal-captions");
       channel.onmessage = (event) => render(event.data);
 
-      // The opener may have closed or reloaded; say so rather than sitting blank.
       window.addEventListener("beforeunload", () => channel.close());
       setInterval(() => {
         const alive = window.opener && !window.opener.closed;

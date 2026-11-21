@@ -65,7 +65,7 @@ def main() -> int:
 
     tracker = HandTracker(max_hands=1)
     recognizer = EnsembleGestureRecognizer(model_path=profile_model_path, dataset_path=profile_dataset_path)
-    words = WordProcessor()
+    words = WordProcessor(smart_case=True)
 
     recognition_mode = MODE_ALL
     conference_mode = args.conference
@@ -269,6 +269,9 @@ def main() -> int:
                 break
             if key == ord(" "):
                 words.add_space()
+            if key in (ord("."), ord(","), ord("?"), ord("!")):
+                words.add_punctuation(chr(key))
+                last_added = ""
             if key in (8, 127):
                 words.backspace()
             if key == ord("c"):

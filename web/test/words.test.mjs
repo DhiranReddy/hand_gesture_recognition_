@@ -25,7 +25,7 @@ test("SpellCorrector leaves numbers untouched (does not convert digits to 'i')",
 
 test("WordProcessor buffers letters and auto-spaces on idle", () => {
   const corrector = new SpellCorrector(SAMPLE_WORDS);
-  const wp = new WordProcessor(corrector, { pauseMs: 200 });
+  const wp = new WordProcessor(corrector, { pauseMs: 200, smartCase: false });
 
   wp.addGesture("H", "letter");
   wp.addGesture("E", "letter");
@@ -48,7 +48,7 @@ test("WordProcessor buffers letters and auto-spaces on idle", () => {
 
 test("WordProcessor correctly handles double letters in words", () => {
   const corrector = new SpellCorrector(SAMPLE_WORDS);
-  const wp = new WordProcessor(corrector, { pauseMs: 200 });
+  const wp = new WordProcessor(corrector, { pauseMs: 200, smartCase: false });
 
   wp.addGesture("H", "letter");
   wp.addGesture("E", "letter");
@@ -59,6 +59,36 @@ test("WordProcessor correctly handles double letters in words", () => {
   assert.equal(wp.buffer, "HELLO");
   wp.flush();
   assert.equal(wp.transcript, "hello");
+});
+
+test("WordProcessor smart-cases sentences, 'I', and punctuation", () => {
+  const corrector = new SpellCorrector(SAMPLE_WORDS);
+  const wp = new WordProcessor(corrector, { pauseMs: 200, smartCase: true });
+
+  // First word is capitalized
+  wp.addGesture("H", "letter");
+  wp.addGesture("E", "letter");
+  wp.addGesture("L", "letter");
+  wp.addGesture("P", "letter");
+  wp.flush();
+  assert.equal(wp.transcript, "Help");
+
+  // Punctuation attaches and follows with space
+  wp.addPunctuation("!");
+  assert.equal(wp.transcript, "Help! ");
+
+  // Next sentence starter is capitalized
+  wp.addGesture("Y", "letter");
+  wp.addGesture("E", "letter");
+  wp.addGesture("S", "letter");
+  wp.flush();
+  assert.equal(wp.transcript, "Help! Yes");
+
+  // Word 'i' is capitalized as 'I'
+  wp.addPunctuation(".");
+  wp.addGesture("I", "letter");
+  wp.flush();
+  assert.equal(wp.transcript, "Help! Yes. I");
 });
 
 test("WordProcessor preserves numbers verbatim", () => {
