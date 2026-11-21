@@ -96,9 +96,10 @@ const dom = Object.fromEntries(
     "hud", "fps-pill", "mode-pill", "readout", "readout-label", "readout-pct",
     "readout-meter", "hold", "hold-fill", "hold-text",
     "caption", "caption-sub", "correction", "speak-all-btn",
-    "history", "download-btn",
+    "history", "download-btn", "export-format", "session-stats",
     "mode-hint", "model-toggle", "hold-range", "hold-out", "pause-range", "pause-out",
     "speak-toggle", "voice-fields", "voice-select", "rate-range", "rate-out",
+    "voice-test-btn", "pitch-range", "pitch-out",
     "voice-hint",
     "space-btn", "undo-btn", "back-btn", "copy-btn", "clear-btn", "present-btn",
     "camera-field", "camera-select", "skeleton-toggle", "mirror-toggle",
@@ -122,6 +123,7 @@ const defaults = {
   sfx: true,
   voiceURI: null,
   rate: 1,
+  pitch: 1,
   skeleton: true,
   mirror: true,
   cameraId: null,
@@ -163,6 +165,7 @@ const state = {
   channel: null,
   presenter: null,
   entries: [],
+  sessionStartTime: null,
   calibration: new Calibration(),
   recording: null,
   neutralSince: null,
@@ -716,9 +719,13 @@ function addHistory(word) {
     minute: "2-digit",
     second: "2-digit",
   });
-  state.entries.push({ word, time });
+  const timestampMs = Date.now();
+  state.entries.push({ word, time, timestampMs });
 
-  if (state.entries.length === 1) dom.history.replaceChildren();
+  if (state.entries.length === 1) {
+    dom.history.replaceChildren();
+    state.sessionStartTime = timestampMs;
+  }
   const li = document.createElement("li");
   const w = document.createElement("span");
   w.className = "history-word";
@@ -729,6 +736,20 @@ function addHistory(word) {
   li.append(w, t);
   dom.history.append(li);
   dom.history.scrollTop = dom.history.scrollHeight;
+  updateSessionStats();
+}
+
+function updateSessionStats() {
+  if (!dom.sessionStats) return;
+  const count = state.entries.length;
+  if (!count) {
+    dom.sessionStats.textContent = "0 words";
+    return;
+  }
+  const elapsedMinutes = (Date.now() - (state.sessionStartTime || Date.now())) / 60000;
+  const wpm = elapsedMinutes > 0.08 ? Math.round(count / elapsedMinutes) : 0;
+  dom.sessionStats.textContent =
+    wpm > 0 ? `${count} ${count === 1 ? "word" : "words"} · ${wpm} wpm` : `${count} ${count === 1 ? "word" : "words"}`;
 }
 
 /* ---------------------------------------------------------- calibration */
@@ -921,9 +942,14 @@ function applySettingsToUI() {
   dom.voiceFields.hidden = !settings.speak;
   dom.rateRange.value = settings.rate;
   dom.rateOut.textContent = `${Number(settings.rate).toFixed(1)}×`;
+  if (dom.pitchRange) {
+    dom.pitchRange.value = settings.pitch || 1;
+    dom.pitchOut.textContent = `${Number(settings.pitch || 1).toFixed(1)}`;
+  }
 
   state.speaker.enabled = settings.speak;
   state.speaker.rate = settings.rate;
+  state.speaker.pitch = settings.pitch || 1;
   state.speaker.voiceURI = settings.voiceURI;
   state.speaker.onVoicesChanged = populateVoices;
   populateVoices(state.speaker.voices);
@@ -949,26 +975,102 @@ async function copyTranscript() {
   }
 }
 
+function formatTimestampVTT(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const millis = Math.floor(ms % 1000);
+  const pad = (n, z = 2) => String(n).padStart(z, "0");
+  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}.${pad(millis, 3)}`;
+}
+
+function formatTimestampSRT(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const millis = Math.floor(ms % 1000);
+  const pad = (n, z = 2) => String(n).padStart(z, "0");
+  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)},${pad(millis, 3)}`;
+}
+
+function buildVTT(text, entries, startTime) {
+  const lines = ["WEBVTT - Signal Gesture Transcript", ""];
+  const t0 = startTime || (entries.length ? entries[0].timestampMs : Date.now());
+  entries.forEach((entry, i) => {
+    const startMs = Math.max(0, (entry.timestampMs || Date.now()) - t0);
+    const endMs = startMs + 2000;
+    lines.push(String(i + 1));
+    lines.push(`${formatTimestampVTT(startMs)} --> ${formatTimestampVTT(endMs)}`);
+    lines.push(entry.word);
+    lines.push("");
+  });
+  return lines.join("\n");
+}
+
+function buildSRT(text, entries, startTime) {
+  const lines = [];
+  const t0 = startTime || (entries.length ? entries[0].timestampMs : Date.now());
+  entries.forEach((entry, i) => {
+    const startMs = Math.max(0, (entry.timestampMs || Date.now()) - t0);
+    const endMs = startMs + 2000;
+    lines.push(String(i + 1));
+    lines.push(`${formatTimestampSRT(startMs)} --> ${formatTimestampSRT(endMs)}`);
+    lines.push(entry.word);
+    lines.push("");
+  });
+  return lines.join("\n");
+}
+
 function downloadTranscript() {
   const text = transcriptText();
   if (!text) return toast("Nothing to download yet");
 
-  const lines = [
-    `Signal transcript — ${new Date().toLocaleString()}`,
-    "",
-    text,
-    "",
-    "Word log",
-    ...state.entries.map((e) => `  ${e.time}  ${e.word}`),
-  ];
-  const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+  const format = dom.exportFormat?.value || "txt";
+  let content = "";
+  let mime = "text/plain;charset=utf-8";
+  const filename = `signal-transcript-${Date.now()}.${format}`;
+
+  if (format === "vtt") {
+    mime = "text/vtt;charset=utf-8";
+    content = buildVTT(text, state.entries, state.sessionStartTime);
+  } else if (format === "srt") {
+    mime = "application/x-subrip;charset=utf-8";
+    content = buildSRT(text, state.entries, state.sessionStartTime);
+  } else if (format === "json") {
+    mime = "application/json;charset=utf-8";
+    content = JSON.stringify(
+      {
+        application: "Signal",
+        exportedAt: new Date().toISOString(),
+        transcript: text,
+        totalWords: state.entries.length,
+        entries: state.entries,
+      },
+      null,
+      2,
+    );
+  } else {
+    const lines = [
+      `Signal transcript — ${new Date().toLocaleString()}`,
+      "",
+      text,
+      "",
+      "Word log",
+      ...state.entries.map((e) => `  ${e.time}  ${e.word}`),
+    ];
+    content = lines.join("\n");
+  }
+
+  const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `signal-transcript-${Date.now()}.txt`;
+  link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
-  toast("Transcript downloaded");
+  toast(`Exported as .${format.toUpperCase()}`);
 }
 
 function openPresenter() {
@@ -1036,6 +1138,15 @@ function wire() {
     dom.rateOut.textContent = `${settings.rate.toFixed(1)}×`;
     saveSettings();
   });
+  dom.pitchRange?.addEventListener("input", (e) => {
+    settings.pitch = Number(e.target.value);
+    state.speaker.pitch = settings.pitch;
+    dom.pitchOut.textContent = `${settings.pitch.toFixed(1)}`;
+    saveSettings();
+  });
+  dom.voiceTestBtn?.addEventListener("click", () => {
+    state.speaker.testVoice();
+  });
   dom.speakAllBtn.addEventListener("click", () => {
     const text = transcriptText();
     if (!text) return toast("Nothing to read yet");
@@ -1061,6 +1172,8 @@ function wire() {
     state.words?.clear();
     state.lastCommitted = "";
     state.entries = [];
+    state.sessionStartTime = null;
+    updateSessionStats();
     dom.history.replaceChildren(emptyHistoryRow());
     render();
     toast("Transcript cleared");
@@ -1188,9 +1301,22 @@ function onKeyDown(event) {
     state.words.clear();
     state.lastCommitted = "";
     state.entries = [];
+    state.sessionStartTime = null;
+    updateSessionStats();
     dom.history.replaceChildren(emptyHistoryRow());
   } else if (key === "v") {
     return void copyTranscript();
+  } else if (key === "e") {
+    return void downloadTranscript();
+  } else if (key === "p") {
+    return void openPresenter();
+  } else if (key === "f") {
+    dom.mirrorToggle.checked = !dom.mirrorToggle.checked;
+    settings.mirror = dom.mirrorToggle.checked;
+    dom.viewport.classList.toggle("mirrored", settings.mirror);
+    saveSettings();
+    toast(settings.mirror ? "Video mirrored" : "Video unmirrored");
+    return;
   } else if (key === "s") {
     return void state.speaker.say(transcriptText());
   } else if (key === "h") {
@@ -1221,6 +1347,13 @@ function init() {
       "This browser has no camera API. Try Chrome, Edge, or Safari over HTTPS.";
     setStatus(dom.statusCamera, "unsupported", "bad");
     return;
+  }
+
+  // Register offline Service Worker for PWA
+  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch(() => {});
+    });
   }
 
   state.channel = new BroadcastChannel(CHANNEL);

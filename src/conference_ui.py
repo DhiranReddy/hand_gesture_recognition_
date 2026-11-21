@@ -156,7 +156,7 @@ def draw_compact_overlay(
         cv2.rectangle(frame, (0, 0), (w, 36), (0, 0, 0), -1)
         cv2.putText(
             frame,
-            f"Conference Mode | {mode_label} | T=captions  C=copy  H=mesh  M=mode  K=save  R=relabel",
+            f"Conference Mode | {mode_label} | T=captions  V=copy  E=export  C=clear  M=mode  K=save",
             (8, 24),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.42,
@@ -167,7 +167,7 @@ def draw_compact_overlay(
     else:
         hints = [
             f"Mode: {mode_label} (M to switch)",
-            "Hold gesture | SPACE=space | C=clear | V=copy | K=save sample | R=relabel",
+            "Hold gesture | SPACE=space | C=clear | V=copy | E=export | K=save | R=relabel",
         ]
         y = 22
         for hint in hints:

@@ -14,6 +14,8 @@ export class Speaker {
     this.enabled = false;
     this.voiceURI = null;
     this.rate = 1;
+    this.pitch = 1;
+    this.volume = 1;
     this.voices = [];
     this.onVoicesChanged = null;
     this.#loadVoices();
@@ -56,11 +58,18 @@ export class Speaker {
       utterance.lang = voice.lang;
     }
     utterance.rate = this.rate;
+    utterance.pitch = this.pitch;
+    utterance.volume = this.volume;
     try {
       synth.speak(utterance);
     } catch {
       /* Autoplay policy or a busy engine — silence is an acceptable fallback. */
     }
+  }
+
+  /** Preview current voice with a short greeting. */
+  testVoice() {
+    this.say("Signal gesture speech preview.");
   }
 
   /** Read the whole transcript back, replacing anything already queued. */

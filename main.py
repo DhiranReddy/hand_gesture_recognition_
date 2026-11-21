@@ -9,7 +9,9 @@ ML ensemble + auto-spacing + spell correction for video calls.
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 import sys
+import time
 
 import cv2
 
@@ -281,6 +283,16 @@ def main() -> int:
                 if copy_to_clipboard(words.display_transcript):
                     copied_flash = 45
                     print("Transcript copied to clipboard.")
+            if key == ord("e"):
+                text = words.display_transcript.strip()
+                if text:
+                    out_dir = Path("transcripts")
+                    out_dir.mkdir(exist_ok=True)
+                    stamp = time.strftime("%Y%m%d_%H%M%S")
+                    out_file = out_dir / f"transcript_{stamp}.txt"
+                    out_file.write_text(text, encoding="utf-8")
+                    copied_flash = 45
+                    print(f"Exported transcript to {out_file}")
             if key == ord("m"):
                 idx = MODE_CYCLE.index(recognition_mode)
                 recognition_mode = MODE_CYCLE[(idx + 1) % len(MODE_CYCLE)]

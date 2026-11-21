@@ -121,9 +121,18 @@
         <div class="card history-card">
           <div class="card-head">
             <h2 class="card-title">Session log</h2>
-            <button type="button" id="download-btn" class="btn btn-quiet btn-sm">
-              Download
-            </button>
+            <div class="card-head-right">
+              <span class="note" id="session-stats">0 words</span>
+              <select id="export-format" class="select select-sm" aria-label="Export format">
+                <option value="txt">Text (.txt)</option>
+                <option value="vtt">WebVTT (.vtt)</option>
+                <option value="srt">Subtitles (.srt)</option>
+                <option value="json">JSON (.json)</option>
+              </select>
+              <button type="button" id="download-btn" class="btn btn-quiet btn-sm">
+                Export
+              </button>
+            </div>
           </div>
           <ol class="history" id="history">
             <li class="history-empty">Committed words will be listed here with timestamps.</li>
@@ -178,11 +187,18 @@
           <div id="voice-fields" hidden>
             <label class="field">
               <span class="field-label">Voice</span>
-              <select id="voice-select" class="select"></select>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <select id="voice-select" class="select" style="flex: 1;"></select>
+                <button type="button" id="voice-test-btn" class="btn btn-quiet btn-sm" title="Preview selected voice">Test</button>
+              </div>
             </label>
             <label class="field">
               <span class="field-label">Rate <output id="rate-out">1.0×</output></span>
               <input type="range" id="rate-range" min="0.6" max="1.6" step="0.05" value="1" />
+            </label>
+            <label class="field">
+              <span class="field-label">Pitch <output id="pitch-out">1.0</output></span>
+              <input type="range" id="pitch-range" min="0.5" max="1.5" step="0.05" value="1" />
             </label>
           </div>
           <p class="hint" id="voice-hint" hidden>
@@ -315,11 +331,15 @@
         <h3>Keyboard</h3>
         <ul class="keys">
           <li><kbd>Space</kbd> insert a space</li>
+          <li><kbd>.,?!</kbd> insert punctuation</li>
           <li><kbd>⌫</kbd> delete last character</li>
           <li><kbd>⌘Z</kbd> undo</li>
           <li><kbd>C</kbd> clear transcript</li>
           <li><kbd>V</kbd> copy transcript</li>
+          <li><kbd>E</kbd> export transcript file</li>
           <li><kbd>S</kbd> read transcript aloud</li>
+          <li><kbd>P</kbd> caption presenter window</li>
+          <li><kbd>F</kbd> toggle mirror video</li>
           <li><kbd>H</kbd> toggle skeleton</li>
           <li><kbd>M</kbd> cycle recognition mode</li>
           <li><kbd>?</kbd> open this guide</li>

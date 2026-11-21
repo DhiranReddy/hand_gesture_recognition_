@@ -787,6 +787,16 @@ main {
   cursor: pointer;
 }
 
+.select-sm {
+  width: auto;
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 7px;
+  height: 28px;
+  background: var(--sand);
+  border: 1px solid var(--line);
+}
+
 .select:hover {
   border-color: var(--line);
 }
