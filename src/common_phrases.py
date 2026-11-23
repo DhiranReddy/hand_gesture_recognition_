@@ -6,13 +6,13 @@ import numpy as np
 
 from src.constants import INDEX_TIP, MIDDLE_TIP, PINKY_TIP, RING_TIP, THUMB_TIP, WRIST
 from src.finger_geometry import (
-    all_fingertips_touch,
     count_extended,
     get_detailed_finger_states,
     fingertips_pinch,
     index_middle_spread,
     index_middle_together,
     palm_size,
+    pointing_horizontal,
 )
 
 
@@ -83,184 +83,108 @@ PHRASE_LABELS: dict[str, str] = {
 }
 
 
-def _dist_to_point(landmarks: list[tuple], idx: int, point: np.ndarray) -> float:
-    return float(np.linalg.norm(np.array(landmarks[idx][:2]) - point))
-
-
 def classify_phrase(landmarks: list[tuple], handedness: str) -> str | None:
-    """Detect common word/phrase gestures."""
+    """
+    Detect common word/phrase gestures with exact parity to the browser rules.
+
+    Only clean, non-colliding geometric shapes are matched:
+    - FOOD: gathered fingertips toward mouth
+    - OK: thumb & index pinch ring, other three extended
+    - LOVE: thumb, index and pinky extended (I-love-you)
+    - HELP: index and pinky extended without thumb (horns)
+    - YES: thumb alone pointing upward
+    - NO: thumb alone pointing downward
+    - WATER: thumb, index, middle and ring extended (W with thumb)
+    - YOU: index pointing horizontal toward person
+    - THANK_YOU: flat hand fingers together pointing horizontal
+    - HELLO: open hand fingers spread
+    - PLEASE: open hand fingers together
+    """
     s = get_detailed_finger_states(landmarks, handedness)
     thumb, index, middle, ring, pinky = s
     ext = count_extended(s)
     palm = palm_size(landmarks)
+    curled = lambda f: f != "extended"
 
-    if thumb == "extended" and index == "extended" and pinky == "extended" and middle == "curled" and ring == "curled":
-        return "LOVE"
-
-    if thumb == "extended" and ext == 0:
-        if landmarks[THUMB_TIP][1] < landmarks[WRIST][1]:
-            return "YES"
-        return "NO"
-
-    if fingertips_pinch(landmarks, THUMB_TIP, INDEX_TIP) and middle == "extended" and ring == "extended" and pinky == "extended":
-        return "OK"
-
-    if ext == 0 and thumb != "extended":
-        return "PLEASE"
-
-    if thumb == "extended" and index == "extended" and middle == "extended" and ring == "curled" and pinky == "curled":
-        return "HELP"
-
-    if index == "extended" and ext == 1 and thumb != "extended":
-        return "YOU"
-
-    if index == "extended" and middle == "extended" and ring == "extended" and pinky == "extended" and index_middle_together(landmarks) and thumb in ("bent", "curled"):
-        return "ME"
-
-    if thumb == "extended" and index == "extended" and middle == "extended" and ring == "extended" and pinky == "curled":
-        return "WATER"
-
+    # --- gathered fingertips: pinching food toward the mouth
     tips = (INDEX_TIP, MIDDLE_TIP, RING_TIP, PINKY_TIP)
-    center = np.mean([landmarks[t][:2] for t in tips], axis=0)
-    if all(_dist_to_point(landmarks, t, center) < palm * 0.5 for t in tips) and thumb == "curled":
+    cx = sum(landmarks[t][0] for t in tips) / len(tips)
+    cy = sum(landmarks[t][1] for t in tips) / len(tips)
+    gathered = all(
+        ((landmarks[t][0] - cx) ** 2 + (landmarks[t][1] - cy) ** 2) ** 0.5 < palm * 0.5
+        for t in tips
+    )
+    if gathered and thumb == "curled" and ext == 0:
         return "FOOD"
 
-    if thumb == "bent" and ext == 0:
-        return "BATHROOM"
+    # --- OK ring: thumb and index meet, the other three stay up
+    if (
+        fingertips_pinch(landmarks, THUMB_TIP, INDEX_TIP)
+        and middle == "extended"
+        and ring == "extended"
+        and pinky == "extended"
+    ):
+        return "OK"
 
-    if index == "bent" and middle == "curled" and ring == "curled" and pinky == "curled" and thumb == "bent":
-        return "SORRY"
+    # --- I-love-you: thumb, index and pinky out together
+    if (
+        thumb == "extended"
+        and index == "extended"
+        and pinky == "extended"
+        and curled(middle)
+        and curled(ring)
+    ):
+        return "LOVE"
 
-    if all(f == "extended" for f in s):
-        return "HELLO" if index_middle_spread(landmarks) else "NICE"
+    # --- horns: the same two fingers without the thumb, so the pair never
+    #     collides with I-love-you
+    if (
+        index == "extended"
+        and pinky == "extended"
+        and thumb != "extended"
+        and curled(middle)
+        and curled(ring)
+    ):
+        return "HELP"
 
-    if index == "extended" and middle == "extended" and ring == "extended" and pinky == "extended" and index_middle_spread(landmarks):
-        return "EMERGENCY"
+    # --- thumb alone: up means yes, down means no
+    if thumb == "extended" and ext == 0:
+        return "YES" if landmarks[THUMB_TIP][1] < landmarks[WRIST][1] else "NO"
 
-    if thumb == "extended" and index == "curled" and middle == "curled" and ring == "curled" and pinky == "curled":
-        if landmarks[THUMB_TIP][1] < landmarks[WRIST][1]:
-            return "GOOD"
-        return "BAD"
+    # --- W with the thumb out, so it reads as water rather than the letter
+    if (
+        thumb == "extended"
+        and index == "extended"
+        and middle == "extended"
+        and ring == "extended"
+        and pinky != "extended"
+    ):
+        return "WATER"
 
-    bent_count = sum(1 for f in s[1:] if f == "bent")
-    if bent_count >= 2 and thumb != "extended" and 2 <= ext <= 3:
-        return "HUNGRY"
+    # --- pointing sideways, at the person you are talking to
+    if (
+        index == "extended"
+        and ext == 1
+        and curled(middle)
+        and curled(ring)
+        and curled(pinky)
+        and pointing_horizontal(landmarks, handedness)
+    ):
+        return "YOU"
 
-    if index == "bent" and middle == "curled" and ring == "curled" and pinky == "curled" and thumb == "extended":
-        return "QUESTION"
-
-    if index == "extended" and ext == 1 and thumb == "curled":
-        return "ONE_MOMENT"
-
-    if ext == 3 and pinky == "curled" and thumb == "bent":
-        return "CAN_YOU_HEAR"
-
-    if index == "bent" and middle == "bent" and ring == "bent" and pinky == "extended" and thumb == "curled":
-        return "HI"
-
-    if index == "extended" and middle == "extended" and ring == "curled" and pinky == "curled" and thumb == "extended":
-        return "GOODBYE"
-
-    if index == "extended" and middle == "extended" and ring == "extended" and pinky == "extended" and thumb != "extended":
+    # --- a flat hand moving out from the chin
+    if (
+        index == "extended"
+        and middle == "extended"
+        and ring == "extended"
+        and pinky == "extended"
+        and index_middle_together(landmarks)
+        and pointing_horizontal(landmarks, handedness)
+    ):
         return "THANK_YOU"
 
-    if index == "bent" and middle == "curled" and ring == "curled" and pinky == "curled" and thumb == "curled":
-        return "UNDERSTAND"
-
-    if index == "bent" and middle == "bent" and ring == "curled" and pinky == "curled":
-        return "DONT_UNDERSTAND"
-
-    if index == "bent" and ext == 0 and thumb == "extended":
-        return "REPEAT"
-
-    if thumb == "curled" and index == "bent" and middle == "bent":
-        return "NAME"
-
-    if all_fingertips_touch(landmarks, ratio=0.32) and thumb == "curled":
-        return "PAIN"
-
-    if thumb == "curled" and index == "bent" and middle == "bent" and ring == "bent":
-        return "MEDICINE"
-
-    if index == "extended" and ext == 1 and thumb == "bent":
-        return "DOCTOR"
-
-    if thumb == "extended" and index == "extended" and middle == "curled" and ring == "curled" and pinky == "curled":
-        return "LATER"
-
-    if thumb == "extended" and pinky == "extended" and index == "curled" and middle == "curled" and ring == "curled":
-        return "NOW"
-
-    if index == "extended" and middle == "extended" and ring == "curled" and pinky == "curled" and thumb == "bent" and index_middle_spread(landmarks):
-        return "CAN_YOU_SEE"
-
-    if index == "extended" and middle == "curled" and ring == "curled" and pinky == "curled" and thumb == "curled":
-        return "WAIT"
-
-    if index == "extended" and middle == "extended" and ring == "curled" and pinky == "curled" and thumb == "curled":
-        return "COME"
-
-    if index == "curled" and middle == "extended" and ring == "curled" and pinky == "curled":
-        return "GO"
-
-    if index == "extended" and middle == "extended" and ring == "extended" and pinky == "curled" and thumb == "curled":
-        return "LOOK"
-
-    if pinky == "extended" and index == "curled" and middle == "curled" and ring == "curled" and thumb == "bent":
-        return "LISTEN"
-
-    if thumb == "extended" and index == "curled" and middle == "curled" and ring == "extended" and pinky == "curled":
-        return "FINE"
-
-    if index == "extended" and middle == "extended" and ring == "curled" and pinky == "curled" and thumb == "extended":
-        return "AGREE"
-
-    if index == "curled" and middle == "curled" and ring == "extended" and pinky == "extended" and thumb == "curled":
-        return "DISAGREE"
-
-    if index == "bent" and middle == "bent" and ring == "bent" and pinky == "curled" and thumb == "curled":
-        return "WRITE"
-
-    if thumb == "curled" and index == "curled" and middle == "curled" and ring == "curled" and pinky == "extended":
-        return "THIRSTY"
-
-    if index == "extended" and middle == "curled" and ring == "curled" and pinky == "curled" and thumb == "bent":
-        return "HERE"
-
-    if index == "curled" and middle == "curled" and ring == "curled" and pinky == "extended" and thumb == "bent":
-        return "THERE"
-
-    if index == "extended" and middle == "extended" and ring == "curled" and pinky == "curled" and thumb == "bent":
-        return "TODAY"
-
-    if index == "extended" and middle == "curled" and ring == "extended" and pinky == "curled" and thumb == "bent":
-        return "TOMORROW"
-
-    if index == "bent" and middle == "curled" and ring == "curled" and pinky == "curled" and thumb == "curled":
-        return "HURT"
-
-    if index == "extended" and middle == "curled" and ring == "curled" and pinky == "curled" and thumb == "extended":
-        return "HAPPY"
-
-    if index == "curled" and middle == "extended" and ring == "curled" and pinky == "curled" and thumb == "curled":
-        return "SAD"
-
-    if index == "curled" and middle == "curled" and ring == "extended" and pinky == "curled" and thumb == "extended":
-        return "ANGRY"
-
-    if index == "bent" and middle == "bent" and ring == "curled" and pinky == "curled" and thumb == "curled":
-        return "TIRED"
-
-    if thumb == "extended" and index == "curled" and middle == "curled" and ring == "curled" and pinky == "curled":
-        return "MUTE"
-
-    if thumb == "extended" and index == "extended" and middle == "curled" and ring == "curled" and pinky == "curled":
-        return "UNMUTE"
-
-    if index == "extended" and middle == "extended" and ring == "curled" and pinky == "bent" and thumb == "curled":
-        return "ANSWER"
-
-    if index == "bent" and middle == "extended" and ring == "curled" and pinky == "curled" and thumb == "curled":
-        return "MAYBE"
+    # --- an open hand held up: spread waves hello, together asks please
+    if all(f == "extended" for f in s):
+        return "HELLO" if index_middle_spread(landmarks) else "PLEASE"
 
     return None

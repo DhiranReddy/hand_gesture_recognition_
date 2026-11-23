@@ -1175,6 +1175,7 @@ function wire() {
     state.sessionStartTime = null;
     updateSessionStats();
     dom.history.replaceChildren(emptyHistoryRow());
+    sfx.playClear();
     render();
     toast("Transcript cleared");
   });
@@ -1304,6 +1305,7 @@ function onKeyDown(event) {
     state.sessionStartTime = null;
     updateSessionStats();
     dom.history.replaceChildren(emptyHistoryRow());
+    sfx.playClear();
   } else if (key === "v") {
     return void copyTranscript();
   } else if (key === "e") {

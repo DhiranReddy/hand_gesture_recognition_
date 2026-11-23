@@ -129,8 +129,9 @@
       <span><span class="dot"></span><span id="state">Connected</span></span>
       <div class="controls">
         <button type="button" class="btn" id="theme-btn" title="Cycle theme (Light, Dark, High Contrast, Transparent)">Theme: Warm</button>
-        <button type="button" class="btn" id="smaller-btn" title="Smaller font">A−</button>
-        <button type="button" class="btn" id="larger-btn" title="Larger font">A+</button>
+        <button type="button" class="btn" id="smaller-btn" title="Smaller font (-)">A−</button>
+        <button type="button" class="btn" id="larger-btn" title="Larger font (+)">A+</button>
+        <button type="button" class="btn" id="fullscreen-btn" title="Toggle fullscreen (F)">⛶ Fullscreen</button>
       </div>
     </div>
 
@@ -140,6 +141,7 @@
       const themeBtn = document.getElementById("theme-btn");
       const smallerBtn = document.getElementById("smaller-btn");
       const largerBtn = document.getElementById("larger-btn");
+      const fullscreenBtn = document.getElementById("fullscreen-btn");
 
       const THEMES = [
         { id: "light", label: "Theme: Warm" },
@@ -172,6 +174,14 @@
         try { localStorage.setItem("signal.presenter.scale", String(currentScale)); } catch {}
       }
 
+      function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+          document.exitFullscreen().catch(() => {});
+        }
+      }
+
       applyTheme();
       applyScale();
 
@@ -188,6 +198,23 @@
       largerBtn.addEventListener("click", () => {
         currentScale = Math.min(1.6, currentScale + 0.1);
         applyScale();
+      });
+
+      fullscreenBtn.addEventListener("click", toggleFullscreen);
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "f" || e.key === "F") {
+          toggleFullscreen();
+        } else if (e.key === "t" || e.key === "T") {
+          currentThemeIdx = (currentThemeIdx + 1) % THEMES.length;
+          applyTheme();
+        } else if (e.key === "+" || e.key === "=") {
+          currentScale = Math.min(1.6, currentScale + 0.1);
+          applyScale();
+        } else if (e.key === "-" || e.key === "_") {
+          currentScale = Math.max(0.65, currentScale - 0.1);
+          applyScale();
+        }
       });
 
       function render({ text = "", live = "" } = {}) {

@@ -26,6 +26,7 @@ sys.path.insert(0, str(ROOT))
 
 from src.asl_alphabet import classify_letter  # noqa: E402
 from src.asl_numbers import classify_number  # noqa: E402
+from src.common_phrases import classify_phrase  # noqa: E402
 from src.finger_geometry import get_detailed_finger_states  # noqa: E402
 from tests.conftest import OPEN_PALM  # noqa: E402
 
@@ -34,7 +35,7 @@ N_CASES = 600
 
 DRIVER = """
 import { fingerStates } from "%(geometry)s";
-import { classifyLetter, classifyNumber } from "%(rules)s";
+import { classifyLetter, classifyNumber, classifyPhrase } from "%(rules)s";
 import { readFileSync } from "node:fs";
 
 const cases = JSON.parse(readFileSync(process.argv[2], "utf8"));
@@ -44,6 +45,7 @@ const out = cases.map((c) => {
     states: fingerStates(lm, c.handedness),
     letter: classifyLetter(lm, c.handedness),
     number: classifyNumber(lm, c.handedness),
+    phrase: classifyPhrase(lm, c.handedness),
   };
 });
 console.log(JSON.stringify(out));
@@ -103,6 +105,7 @@ def main() -> int:
                 "states": get_detailed_finger_states(lm, case["handedness"]),
                 "letter": classify_letter(lm, case["handedness"]),
                 "number": classify_number(lm, case["handedness"]),
+                "phrase": classify_phrase(lm, case["handedness"]),
             }
         )
 
@@ -131,7 +134,7 @@ def main() -> int:
             return 1
         js = json.loads(proc.stdout)
 
-    mismatches = {"states": 0, "letter": 0, "number": 0}
+    mismatches = {"states": 0, "letter": 0, "number": 0, "phrase": 0}
     shown = 0
     for i, (a, b) in enumerate(zip(py, js)):
         for field in mismatches:
@@ -141,7 +144,7 @@ def main() -> int:
                     print(f"  case {i} {field}: python={a[field]!r} js={b[field]!r}")
                     shown += 1
 
-    fired = sum(1 for r in py if r["letter"] or r["number"])
+    fired = sum(1 for r in py if r["letter"] or r["number"] or r["phrase"])
     print(f"cases                : {len(cases)}")
     print(f"cases where a rule fired : {fired}")
     for field, count in mismatches.items():

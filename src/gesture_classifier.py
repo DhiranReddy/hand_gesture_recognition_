@@ -51,8 +51,8 @@ def classify_gesture(
 
     # MODE_ALL — unique gestures first, then spell, then phrases
     unique_phrases = {
-        "LOVE", "OK", "HELP", "FOOD", "WATER", "BATHROOM", "EMERGENCY",
-        "QUESTION", "DONT_UNDERSTAND", "UNDERSTAND", "CAN_YOU_HEAR", "CAN_YOU_SEE",
+        "YES", "NO", "LOVE", "HELP", "OK", "HELLO",
+        "PLEASE", "YOU", "THANK_YOU", "WATER", "FOOD",
     }
     if phrase and phrase in unique_phrases:
         return phrase, "phrase"

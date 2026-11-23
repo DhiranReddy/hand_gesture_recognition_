@@ -12,6 +12,7 @@ const PRECACHE_URLS = [
   "./styles.css?v=13",
   "./manifest.webmanifest",
   "./public/model/words.json",
+  "./public/model/gesture_mlp.json",
   "./src/audio.js",
   "./src/calibration.js",
   "./src/classifier.js",
